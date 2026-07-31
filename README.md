@@ -8,7 +8,8 @@ It is meant to be forked as the starting point for a new app, or read as a
 worked example of the workflow.
 
 ```
-apps/web              Next.js app (App Router, src/) — the only deployable
+apps/web              Next.js app (App Router, src/) — explains the repo at /
+apps/api              NestJS service — GET /health, nothing else yet
 packages/ui           shared React components; button.tsx is the reference
 packages/eslint-config, packages/typescript-config   shared configs
 .claude/skills        13 skills (engineering discipline + ticket workflow)
@@ -23,7 +24,11 @@ docs/handoff          the spec this repo was built from
 
 ```bash
 pnpm install          # also installs the git hooks via the `prepare` script
-pnpm run dev          # http://localhost:3000
+pnpm run dev          # web on :3000, api on :3001
+
+pnpm --filter web run dev     # just the Next.js app
+pnpm --filter api run dev     # just the Nest service
+curl localhost:3001/health    # {"status":"ok","uptimeSeconds":0,…}
 
 pnpm run build        # turbo run build
 pnpm run lint         # turbo run lint

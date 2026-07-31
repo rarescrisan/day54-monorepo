@@ -7,9 +7,22 @@ code is right — fix this file.
 ## Home page
 
 - **Route:** `/` (`apps/web/src/app/page.tsx`)
-- **Behavior:** Shows the `web-skeleton` heading, an explanatory paragraph, a
-  click counter, and a card linking to the Turborepo docs.
-- **Tests:** `apps/web/e2e/home.spec.ts` (flow), colocated component tests.
+- **Behavior:** A single explainer page for the repo itself. Under the
+  `web-skeleton` heading it walks through five sections: what the workspaces
+  are, how the Claude skills support AI-assisted development (each listed with
+  the failure mode it prevents), the guardrails that don't rely on anyone
+  remembering, the branch-promotion model, and a live demonstration of the
+  server/client boundary. Ends with a card linking to the Turborepo docs.
+- **Tests:** `apps/web/e2e/home.spec.ts` asserts every section heading is
+  reachable by accessible name and that the embedded counter still responds.
+
+## Health endpoint
+
+- **Where:** `apps/api`, `GET /health` — see `API_SPEC.md` for the contract
+- **Behavior:** Reports that the service process is alive, with its uptime.
+  Nothing consumes it inside this repo; it exists for a load balancer or
+  orchestrator probe.
+- **Tests:** `apps/api/src/health/health.controller.test.ts`
 
 ## Counter
 

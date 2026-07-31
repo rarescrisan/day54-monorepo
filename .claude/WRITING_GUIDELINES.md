@@ -5,7 +5,8 @@ today — when a new convention settles, add it here; don't add rules ahead of t
 
 ## Layout
 
-- `apps/` holds deployable Next.js apps. `packages/` holds shared code.
+- `apps/` holds deployables: `apps/web` (Next.js) and `apps/api` (NestJS).
+  `packages/` holds shared code. The two apps never import each other.
 - Shared code is consumed by its workspace name (`@repo/ui`, `@repo/eslint-config`,
   `@repo/typescript-config`). Never reach across a package boundary with a relative
   path (`../../packages/ui/src/button`).
@@ -49,7 +50,12 @@ today — when a new convention settles, add it here; don't add rules ahead of t
   genuinely unknown, use `unknown` and narrow it.
 - tsconfigs extend `@repo/typescript-config`. `packages/*` resolve as
   `moduleResolution: Bundler` because they ship `.tsx` source that Next and Vite
-  bundle — they are never executed by node directly.
+  bundle — they are never executed by node directly. `apps/api` keeps
+  `NodeNext` and is emitted as CommonJS.
+- **Path-valued compiler options (`outDir`, `rootDir`, `paths`) belong in the
+  consuming tsconfig, never in the shared one.** tsconfig resolves relative
+  paths against the file that declares them, so an `outDir` in
+  `@repo/typescript-config` silently emits into that package instead of the app.
 
 ## Testing
 
