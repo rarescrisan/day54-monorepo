@@ -17,6 +17,7 @@ This project defines specialized skills in `.claude/skills/`:
 - **`/surgical-diffs`** — Use when editing existing code.
 - **`/test-like-a-user`** — Use when writing or modifying tests.
 - **`/verify-before-done`** — Use before committing nontrivial changes.
+- **`/maintain-architecture-docs`** — Use when a change touches structure, API surface, or user-facing behavior; keeps `docs/architecture/` specs accurate.
 
 Ticket workflow (backed by the scripts in `.claude/ticket-planner/`):
 
