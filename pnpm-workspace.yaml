@@ -1,0 +1,16 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Supply-chain guard: refuse any package version published in the last 7 days.
+# Compromised releases are usually spotted and unpublished inside that window.
+# There is a `minimumReleaseAgeExclude` escape hatch — don't reach for it. Pin an
+# older version instead, and if a fix really is urgent, say so in the PR.
+minimumReleaseAge: 10080
+
+# Only these packages may run install scripts. sharp is Next.js image
+# optimisation; unrs-resolver is the native resolver eslint-plugin-import-x uses
+# for `import/no-cycle`. Everything else installs with scripts blocked.
+allowBuilds:
+  sharp: true
+  unrs-resolver: true

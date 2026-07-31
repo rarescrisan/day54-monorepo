@@ -1,0 +1,15 @@
+pnpm-lock.yaml
+package-lock.json
+node_modules
+.next
+.turbo
+coverage
+dist
+out
+apps/web/playwright-report
+apps/web/test-results
+apps/web/next-env.d.ts
+
+# The handoff spec is a verbatim artifact — reformatting it would make it
+# diverge from the document the repo was built from.
+docs/handoff/

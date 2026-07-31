@@ -1,0 +1,23 @@
+{
+  "name": "web-skeleton",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "e2e": "turbo run e2e",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "3.9.6",
+    "turbo": "2.10.6",
+    "typescript": "5.9.3"
+  }
+}
