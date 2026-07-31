@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+
+branch=$(git symbolic-ref --short HEAD)
+if ! echo "$branch" | grep -Eq '^(main|release|develop)$|^(feature|feat|chore|fix|bugfix|hotfix|refactor|docs)/.+'; then
+  echo "Branch '$branch' is not allowed."
+  echo "  Long-lived: main, release, develop"
+  echo "  Feature:    feature/<name>, feat/<name>"
+  echo "  Other:      chore/<name>, fix/<name>, bugfix/<name>, hotfix/<name>, refactor/<name>, docs/<name>"
+  exit 1
+fi
+
+pnpm turbo run lint typecheck test || exit 1
