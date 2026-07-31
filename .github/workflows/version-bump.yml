@@ -1,0 +1,65 @@
+name: Version bump on main
+
+# When a develop -> main promotion PR merges, bump package.json on main
+# according to the "semver:<bump>" label that release-pr.yml applied (and a
+# human may have overridden). main's package.json is therefore the current
+# released version of the app.
+#
+# Falls back to "patch" if no semver label is present (e.g. release-pr.yml
+# never ran because the ANTHROPIC_API_KEY secret was missing).
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: version-bump-main
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Bump package.json version
+    if: github.event.pull_request.merged == true && github.head_ref == 'develop'
+    runs-on: ubuntu-latest
+    env:
+      LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          # main is protected: push with RELEASE_PUSH_TOKEN (a fine-grained
+          # PAT with Contents: read/write, owned by an actor in the branch
+          # protection bypass list). Falls back to the default GITHUB_TOKEN
+          # if the secret is unset — the push then fails against protection,
+          # which is the honest failure mode.
+          token: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Bump version and push to main
+        run: |
+          set -euo pipefail
+
+          bump=patch
+          case " $LABELS " in
+            *' semver:major '*) bump=major ;;
+            *' semver:minor '*) bump=minor ;;
+            *' semver:patch '*) bump=patch ;;
+            *) echo "No semver label on PR #${{ github.event.pull_request.number }}; defaulting to patch" ;;
+          esac
+
+          pnpm version "$bump" --no-git-tag-version
+          new=$(jq -r .version package.json)
+          echo "Bump: $bump -> v$new"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json
+          git commit -m "chore(release): v$new"
+          git push origin main
