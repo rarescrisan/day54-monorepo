@@ -130,13 +130,15 @@ async function taskPayload(ticket) {
     html_notes: markdownToHtmlNotes(ticket.description_markdown ?? ""),
   };
 
-  if (CONFIG.DEFAULT_ASSIGNEE_GID) payload.assignee = CONFIG.DEFAULT_ASSIGNEE_GID;
+  if (CONFIG.DEFAULT_ASSIGNEE_GID)
+    payload.assignee = CONFIG.DEFAULT_ASSIGNEE_GID;
 
   const customFields = buildCustomFields({
     priority: ticket.priority,
-    storyPoints: ticket.type === "Story" ? ticket.story_points : null,
+    storyPoints: ticket.story_points ?? null,
   });
-  if (Object.keys(customFields).length > 0) payload.custom_fields = customFields;
+  if (Object.keys(customFields).length > 0)
+    payload.custom_fields = customFields;
 
   const tagGids = await resolveTagGids(ticket.labels ?? []);
   if (tagGids.length > 0) payload.tags = tagGids;
@@ -165,7 +167,10 @@ if (updateOnly) {
     const gid = gidOf(localId);
     // PUT replaces only the fields present in the payload; sections,
     // completion, dependencies and parentage are untouched by design.
-    await request("PUT", `/tasks/${gid}`, await taskPayload(ticket));
+    // Asana rejects `tags` on PUT (create-time or addTag/removeTag only).
+    const payload = await taskPayload(ticket);
+    delete payload.tags;
+    await request("PUT", `/tasks/${gid}`, payload);
     console.log(`  ↻ ${localId}  ${ticket.summary}`);
   }
 
@@ -201,7 +206,8 @@ for (const epic of epics) {
 
 console.log("\nPass 2/4 — stories");
 for (const story of stories) {
-  if (!story.epic_local_id) die(`${story.local_id} (Story) has no epic_local_id`);
+  if (!story.epic_local_id)
+    die(`${story.local_id} (Story) has no epic_local_id`);
 
   if (!state.issues[story.local_id]) {
     const task = await request("POST", "/tasks", {
@@ -266,7 +272,9 @@ for (const [key, { dependent, blocker }] of edges) {
     continue;
   }
   if (!byId.has(blocker)) {
-    console.warn(`  ! ${dependent} is blocked_by unknown ticket "${blocker}"; skipping`);
+    console.warn(
+      `  ! ${dependent} is blocked_by unknown ticket "${blocker}"; skipping`,
+    );
     continue;
   }
   try {
@@ -315,11 +323,16 @@ for (const subtask of subtasks) {
 
 // ---------------------------------------------------------------------------
 
-console.log(`\n✓ replay complete — ${Object.keys(state.issues).length} task(s) mapped`);
+console.log(
+  `\n✓ replay complete — ${Object.keys(state.issues).length} task(s) mapped`,
+);
 console.log("\nPermalinks:");
 for (const ticket of tickets) {
   const entry = state.issues[ticket.local_id];
-  if (entry) console.log(`  ${ticket.local_id.padEnd(14)} ${entry.permalink ?? entry.gid}`);
+  if (entry)
+    console.log(
+      `  ${ticket.local_id.padEnd(14)} ${entry.permalink ?? entry.gid}`,
+    );
 }
 console.log(
   "\nNext: record the sync baseline so later edits can be attributed to a side:\n" +

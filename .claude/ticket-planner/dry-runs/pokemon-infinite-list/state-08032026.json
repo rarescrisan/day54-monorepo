@@ -1,0 +1,199 @@
+{
+  "issues": {
+    "WEB-POKE-E1": {
+      "gid": "1217137567516157",
+      "permalink": "https://app.asana.com/1/1217079558452780/project/1217137770260769/task/1217137567516157"
+    },
+    "WEB-POKE-1": {
+      "gid": "1217137494982270",
+      "permalink": "https://app.asana.com/1/1217079558452780/project/1217137770260769/task/1217137494982270"
+    },
+    "WEB-POKE-2": {
+      "gid": "1217137769839160",
+      "permalink": "https://app.asana.com/1/1217079558452780/project/1217137770260769/task/1217137769839160"
+    },
+    "WEB-POKE-3": {
+      "gid": "1217137535397069",
+      "permalink": "https://app.asana.com/1/1217079558452780/project/1217137770260769/task/1217137535397069"
+    },
+    "WEB-POKE-1.1": {
+      "gid": "1217137775749467",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137775749467"
+    },
+    "WEB-POKE-1.2": {
+      "gid": "1217137775786659",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137775786659"
+    },
+    "WEB-POKE-1.3": {
+      "gid": "1217137834542680",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137834542680"
+    },
+    "WEB-POKE-1.4": {
+      "gid": "1217137775788854",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137775788854"
+    },
+    "WEB-POKE-1.5": {
+      "gid": "1217137834553322",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137834553322"
+    },
+    "WEB-POKE-2.1": {
+      "gid": "1217137775786685",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137775786685"
+    },
+    "WEB-POKE-2.2": {
+      "gid": "1217153382581581",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217153382581581"
+    },
+    "WEB-POKE-2.3": {
+      "gid": "1217137775799608",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137775799608"
+    },
+    "WEB-POKE-2.4": {
+      "gid": "1217137780678368",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137780678368"
+    },
+    "WEB-POKE-2.5": {
+      "gid": "1217153382610571",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217153382610571"
+    },
+    "WEB-POKE-3.1": {
+      "gid": "1217137787784175",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137787784175"
+    },
+    "WEB-POKE-3.2": {
+      "gid": "1217137834526383",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137834526383"
+    },
+    "WEB-POKE-3.3": {
+      "gid": "1217153382584745",
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217153382584745"
+    }
+  },
+  "homed": ["WEB-POKE-1", "WEB-POKE-2", "WEB-POKE-3"],
+  "links": [
+    "WEB-POKE-2<-WEB-POKE-1",
+    "WEB-POKE-3<-WEB-POKE-1",
+    "WEB-POKE-3<-WEB-POKE-2"
+  ],
+  "sync": {
+    "WEB-POKE-E1": {
+      "summary": "Pokémon infinite list (RFC 0001)",
+      "description_markdown": "## Context\n\nImplements [RFC 0001 — Pokémon infinite list with a caching proxy](https://github.com/rarescrisan/day54/blob/develop/docs/rfcs/0001-pokemon-infinite-list.md): a `/pokemon` page in `apps/web` that renders an infinite-scrolling list, fed by a same-app route handler (`GET /api/pokemon`) that proxies PokeAPI behind an in-memory cache.\n\nThis is the repo's first route handler, first external service call, and first client-side data fetch — a deliberately small end-to-end exercise of the conventions.\n\n## Scope\n\n- WEB-POKE-1 — the proxy route handler with Zod validation and the module-level cache\n- WEB-POKE-2 — the `/pokemon` page and the `PokemonList` client component\n- WEB-POKE-3 — Playwright e2e plus the three `docs/architecture/` spec updates\n\n## Out of scope\n\nSearch, detail pages, persistence, shared caching, auth (local-only app), rate-limit handling beyond surfacing an error.",
+      "labels": "pokemon",
+      "priority": "P2",
+      "story_points": "19"
+    },
+    "WEB-POKE-1": {
+      "summary": "[API] Pokémon proxy route handler with in-memory cache",
+      "description_markdown": "## Context\n\nRFC 0001 (`docs/rfcs/0001-pokemon-infinite-list.md`). First route handler in `apps/web` — `API_SPEC.md` currently states the app has none. The proxy lives in `apps/web`, **not** `apps/api`: the architecture spec forbids web → api calls.\n\n## Requirements\n\n- `apps/web/src/app/api/pokemon/route.ts`: `GET /api/pokemon?offset&limit`, proxying `https://pokeapi.co/api/v2/pokemon`. The base URL is a module constant, not an env var (no `turbo.json` `globalEnv` change).\n- Query params validated with a Zod schema (`pokemonQuerySchema`): `offset` integer ≥ 0, default 0; `limit` integer 1–50, default 20. Invalid input → `400` with `{ error }`, upstream never called.\n- Response shape `{ items: [{ id, name, spriteUrl }], nextOffset }` — `id` parsed from the trailing segment of PokeAPI's item URL, `spriteUrl` built from the official sprites CDN pattern, `nextOffset` is `null` on the last page.\n- Module-level `Map` cache keyed by `offset:limit`. Only `200` upstream responses are cached. No TTL, no eviction (roster is ~65 pages — naturally bounded).\n- Upstream non-2xx / network error → `502` with `{ error }`, never cached.\n- New dev/runtime deps (`zod`, `msw` for tests) pinned exactly; `pnpm-workspace.yaml` `minimumReleaseAge` blocks versions younger than 7 days, so pin accordingly.\n- Tests in `route.test.ts` with an MSW node server — mock at the network boundary only, never our own modules.\n\n## Acceptance\n\n- `pnpm turbo run test --filter web` passes.\n- A test proves the second identical request is served from cache: MSW upstream request count stays at 1.\n- A test proves invalid `offset`/`limit` returns `400` and the upstream is never called.\n- A test proves upstream `500` → `502`, and a subsequent retry succeeds (failures are not cached).\n- `pnpm turbo run lint typecheck --filter web` passes.",
+      "labels": "api|pokemon",
+      "priority": "P2",
+      "story_points": "7"
+    },
+    "WEB-POKE-2": {
+      "summary": "[FE] /pokemon page with infinite-scrolling list",
+      "description_markdown": "## Context\n\nRFC 0001. Consumes `GET /api/pokemon` from WEB-POKE-1. Mirrors the repo's server/client reference pair: the page stays a Server Component, the interactive leaf is the client component (`page.tsx` / `counter.tsx` pattern).\n\n## Requirements\n\n- `apps/web/src/app/pokemon/page.tsx` — Server Component shell with the page heading.\n- `apps/web/src/components/pokemon-list.tsx` — `\"use client\"` leaf. Named export, explicit return type, exported props interface, kebab-case file name (see `.claude/WRITING_GUIDELINES.md`; copy the shape of `packages/ui/src/button.tsx`).\n- Fetches offset 0 on mount and renders rows (name + sprite), each row a list item with an accessible name. Sprites as plain `<img>` with explicit width/height — no `next/image` config wiring.\n- An `IntersectionObserver` sentinel after the last row fetches the next page when visible, `nextOffset` is non-null, and no request is in flight.\n- Loading status rendered with `aria-live=\"polite\"` (same announcement pattern as the counter).\n- On fetch failure: stop auto-loading, show the error and a **Retry** button that re-requests the failed offset.\n- When `nextOffset` is `null`: unobserve the sentinel, render an end-of-list message.\n- Plain `useState`/`useRef` — no data-fetching library (RFC rejects TanStack Query/SWR for one list).\n- Tests in `pokemon-list.test.tsx` (Vitest + Testing Library + MSW, `IntersectionObserver` stubbed — jsdom has none), querying by role and accessible name.\n\n## Acceptance\n\n- `pnpm turbo run test --filter web` passes.\n- Tests cover: first page renders by accessible name; an intersection triggers exactly one append; failure shows **Retry** and retrying recovers; no further fetches after the last page.\n- `pnpm turbo run lint typecheck --filter web` passes.",
+      "labels": "frontend|pokemon",
+      "priority": "P2",
+      "story_points": "8"
+    },
+    "WEB-POKE-3": {
+      "summary": "[QA] Pokémon e2e flow and architecture spec updates",
+      "description_markdown": "## Context\n\nRFC 0001, final wave: prove the flow end to end in a real browser and keep `docs/architecture/` truthful (per the maintain-architecture-docs convention — this change touches the HTTP surface, external dependencies, and user-facing behavior, so all three specs move in the same change).\n\n## Requirements\n\n- `apps/web/e2e/pokemon.spec.ts` — Playwright, with `page.route` intercepting `/api/pokemon`; the test must not depend on pokeapi.co being reachable.\n- Assert: the `/pokemon` heading and first-page rows are reachable by accessible name; scrolling the sentinel into view loads and appends a second page.\n- `docs/architecture/API_SPEC.md` — replace the \"no route handlers\" paragraph with a `GET /api/pokemon` entry in the documented template (handler, auth, request, response, side effects).\n- `docs/architecture/FEATURE_SPEC.md` — add a \"Pokémon list\" entry (route, behavior, tests).\n- `docs/architecture/ARCHITECTURE_SPEC.md` — amend \"Data and persistence\": name PokeAPI as an outbound dependency of `apps/web` and describe the per-process in-memory cache and its limits.\n\n## Acceptance\n\n- `pnpm turbo run e2e --filter web` passes.\n- `API_SPEC.md` no longer claims `apps/web` has no route handlers; all three specs mention the new route/feature/dependency.",
+      "labels": "docs|pokemon|qa",
+      "priority": "P3",
+      "story_points": "4"
+    },
+    "WEB-POKE-1.1": {
+      "summary": "Add zod and msw, pinned exactly",
+      "description_markdown": "`apps/web/package.json`: `zod` as a dependency, `msw` as a devDependency, both exact versions older than 7 days (`minimumReleaseAge`). `.npmrc` already sets `save-exact=true`.",
+      "labels": "api|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "1"
+    },
+    "WEB-POKE-1.2": {
+      "summary": "pokemonQuerySchema and PokemonPage types",
+      "description_markdown": "In the route module: Zod schema for `offset` (int ≥ 0, default 0) and `limit` (int 1–50, default 20), plus the exported `PokemonPage` response types (`items`, `nextOffset`).",
+      "labels": "api|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "1"
+    },
+    "WEB-POKE-1.3": {
+      "summary": "GET handler: proxy, reshape, 400/502 paths",
+      "description_markdown": "`apps/web/src/app/api/pokemon/route.ts`: validate query → fetch PokeAPI (base URL a module constant) → reshape to `{ items: [{ id, name, spriteUrl }], nextOffset }`. Invalid input → 400; upstream failure → 502.",
+      "labels": "api|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "2"
+    },
+    "WEB-POKE-1.4": {
+      "summary": "Module-level Map cache",
+      "description_markdown": "Module-level `Map<string, PokemonPage>` keyed `offset:limit`; consult before fetching, populate only on upstream 200. No TTL, no eviction.",
+      "labels": "api|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "1"
+    },
+    "WEB-POKE-1.5": {
+      "summary": "route.test.ts with MSW node server",
+      "description_markdown": "`route.test.ts` (Vitest + MSW): happy path reshape; cache hit (upstream request count stays 1); invalid params → 400 with no upstream call; upstream 500 → 502 and not cached (retry succeeds).",
+      "labels": "api|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "2"
+    },
+    "WEB-POKE-2.1": {
+      "summary": "/pokemon page shell (Server Component)",
+      "description_markdown": "`apps/web/src/app/pokemon/page.tsx`: Server Component with the page heading, rendering `<PokemonList />`. No `\"use client\"` here.",
+      "labels": "frontend|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "1"
+    },
+    "WEB-POKE-2.2": {
+      "summary": "PokemonList: first page render",
+      "description_markdown": "`apps/web/src/components/pokemon-list.tsx` (`\"use client\"`): fetch offset 0 on mount, render list items with accessible names, sprite as plain `<img>` with width/height. Shape per `packages/ui/src/button.tsx` conventions.",
+      "labels": "frontend|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "2"
+    },
+    "WEB-POKE-2.3": {
+      "summary": "IntersectionObserver sentinel and append",
+      "description_markdown": "Sentinel element after the last row; on intersect, fetch `nextOffset` iff non-null and nothing in flight, append items. Unobserve + end-of-list message when `nextOffset` is null.",
+      "labels": "frontend|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "2"
+    },
+    "WEB-POKE-2.4": {
+      "summary": "Loading announcement, error state, Retry",
+      "description_markdown": "`aria-live=\"polite\"` loading status; on fetch failure stop auto-loading and render the error with a **Retry** button that re-requests the failed offset.",
+      "labels": "frontend|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "1"
+    },
+    "WEB-POKE-2.5": {
+      "summary": "pokemon-list.test.tsx (Testing Library + MSW)",
+      "description_markdown": "Component tests with `IntersectionObserver` stubbed (jsdom has none), MSW at the network boundary, queries by role/accessible name: first render, one append per intersection, Retry recovery, stop at last page.",
+      "labels": "frontend|pokemon|subtask",
+      "priority": "P2",
+      "story_points": "2"
+    },
+    "WEB-POKE-3.1": {
+      "summary": "Playwright e2e: pokemon.spec.ts",
+      "description_markdown": "`apps/web/e2e/pokemon.spec.ts` with `page.route` intercepting `/api/pokemon` (no dependency on pokeapi.co): heading and rows by accessible name; scrolling loads a second page.",
+      "labels": "pokemon|qa|subtask",
+      "priority": "P3",
+      "story_points": "2"
+    },
+    "WEB-POKE-3.2": {
+      "summary": "API_SPEC.md: GET /api/pokemon entry",
+      "description_markdown": "Replace the \"no route handlers\" paragraph in `docs/architecture/API_SPEC.md` with a `GET /api/pokemon` entry in the documented template (handler, auth, request, response, side effects).",
+      "labels": "docs|pokemon|subtask",
+      "priority": "P3",
+      "story_points": "1"
+    },
+    "WEB-POKE-3.3": {
+      "summary": "FEATURE_SPEC and ARCHITECTURE_SPEC updates",
+      "description_markdown": "`FEATURE_SPEC.md`: add the \"Pokémon list\" entry (route, behavior, tests). `ARCHITECTURE_SPEC.md`: amend \"Data and persistence\" with PokeAPI as an outbound dependency of `apps/web` and the per-process cache.",
+      "labels": "docs|pokemon|subtask",
+      "priority": "P3",
+      "story_points": "1"
+    }
+  }
+}

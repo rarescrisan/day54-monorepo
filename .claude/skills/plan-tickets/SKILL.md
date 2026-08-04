@@ -49,18 +49,18 @@ tickets file needs an explicit `--state`.
 
 One JSON object per line. Keys by type:
 
-| Field | Epic | Story | Sub-task |
-|---|:--:|:--:|:--:|
-| `local_id` | ✓ | ✓ | ✓ |
-| `type` (`Epic` / `Story` / `Sub-task`) | ✓ | ✓ | ✓ |
-| `summary` | ✓ | ✓ | ✓ |
-| `priority` (`P1`–`P5`) | ✓ | ✓ | ✓ |
-| `labels` (string[]) | ✓ | ✓ | ✓ |
-| `story_points` | `null` | Fibonacci 1/2/3/5/8/13 | `null` |
-| `description_markdown` | ✓ | ✓ | ✓ |
-| `epic_local_id` | — | ✓ | — |
-| `parent_local_id` | — | — | ✓ |
-| `blocks` / `blocked_by` (local ids) | — | ✓ | — |
+| Field                                  |        Epic        |        Story         | Sub-task |
+| -------------------------------------- | :----------------: | :------------------: | :------: |
+| `local_id`                             |         ✓          |          ✓           |    ✓     |
+| `type` (`Epic` / `Story` / `Sub-task`) |         ✓          |          ✓           |    ✓     |
+| `summary`                              |         ✓          |          ✓           |    ✓     |
+| `priority` (`P1`–`P5`)                 |         ✓          |          ✓           |    ✓     |
+| `labels` (string[])                    |         ✓          |          ✓           |    ✓     |
+| `story_points`                         | sum of its stories | sum of its sub-tasks |   1–3    |
+| `description_markdown`                 |         ✓          |          ✓           |    ✓     |
+| `epic_local_id`                        |         —          |          ✓           |    —     |
+| `parent_local_id`                      |         —          |          —           |    ✓     |
+| `blocks` / `blocked_by` (local ids)    |         —          |          ✓           |    —     |
 
 `local_id` uses a short initiative tag: `WEB-CTA-E1` (epic), `WEB-CTA-1` (story),
 `WEB-CTA-1.2` (sub-task of story 1). **Asana has no issue keys, so after replay the
@@ -70,17 +70,28 @@ local ID is the ticket's permanent name** — it goes in commit scopes and PR ti
 Summaries take an optional layer prefix for board filtering: `[FE]`, `[API]`, `[INFRA]`,
 `[QA]`, `[DOCS]`. Omit when the work doesn't split by layer.
 
+**Granularity.** A story is the smallest independently shippable, testable unit — if a
+story's requirements bundle two things that could merge separately, split it. Then break
+every story of 2+ points into sub-tasks: one per mechanical step (a file to create, a
+dependency to add, a config wiring point, a test file), typically 3–6 per story. A story
+needing more than 6 is a story to split, not a longer checklist. Sub-tasks are how
+progress becomes visible mid-story and how `work-ticket` gets a checklist — a plan whose
+stories have no sub-tasks is almost always too coarse.
+
 **Story description template** — the `## Acceptance` section is what `work-ticket` later
 verifies against, so write it as commands and observable outcomes, not intentions:
 
 ```markdown
 ## Context
+
 Why this exists, and what in the codebase it touches today.
 
 ## Requirements
+
 - Concrete, file-level where possible.
 
 ## Acceptance
+
 - `pnpm turbo run test --filter web` passes.
 - Navigating to /settings as a signed-out user redirects to /login.
 ```
@@ -96,7 +107,7 @@ degrades on the way to Asana and again on every sync.
 ### 4. Write the supporting docs
 
 - **README.md** — origin (which doc, which ticket), the design decision that shaped the
-  breakdown and *why*, locked decisions, open questions, file table, replay command, forecast
+  breakdown and _why_, locked decisions, open questions, file table, replay command, forecast
   total, critical path. If the plan deviates from the source doc, say so at the top.
 - **recommended-order.md** — build order in waves, computed from `blocked_by`/`blocks`, with
   each ticket's dependencies named. Status legend (✅ done · ▶️ ready · ⏳ blocked).
@@ -136,12 +147,12 @@ throwaway task you then delete).
 
 ## Conventions
 
-| | |
-|---|---|
-| Priority | P1 blockers/core · P2 important · P3 standard · P4 minor · P5 tech debt |
-| Points | 1/2/3/5/8/13. Above 8 means the story should be split. |
-| Labels | layer (`frontend`, `api`, `infra`, `qa`, `docs`) + feature tags. Sub-tasks also carry `subtask`. |
-| Dependencies | schema → API, API → consumer, implementation → tests: express as `blocked_by` on the dependent story; `replay.mjs` dedupes both directions into one edge. |
+|              |                                                                                                                                                                                                                                                                                                       |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Priority     | P1 blockers/core · P2 important · P3 standard · P4 minor · P5 tech debt                                                                                                                                                                                                                               |
+| Points       | Estimate bottom-up and ladder up: each sub-task carries 1–3 points, a story's points is the exact sum of its sub-tasks, an epic's points is the exact sum of its stories. A story summing above 8 should be split. (A story with no sub-tasks — rare, see Granularity — estimates directly at 1/2/3.) |
+| Labels       | layer (`frontend`, `api`, `infra`, `qa`, `docs`) + feature tags. Sub-tasks also carry `subtask`.                                                                                                                                                                                                      |
+| Dependencies | schema → API, API → consumer, implementation → tests: express as `blocked_by` on the dependent story; `replay.mjs` dedupes both directions into one edge.                                                                                                                                             |
 
 ## Gotchas
 
