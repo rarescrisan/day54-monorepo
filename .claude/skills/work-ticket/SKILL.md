@@ -80,6 +80,12 @@ now and propose the check you'll actually run.
 State any assumption the ticket leaves open (the README's "open questions" is where these
 usually hide).
 
+Then, before writing any code, ask the user any remaining clarifying questions — anything
+ambiguous in the requirements, acceptance criteria, or approach that the context didn't
+settle. This is a deliberate double check: if there are genuinely no questions, say so
+explicitly ("No open questions — proceeding") rather than skipping the step silently. Wait
+for answers before implementing.
+
 ## 6. Implement
 
 Branch first — `feat/<descriptive-slug>` (branch names are descriptive, not ticket-keyed;
