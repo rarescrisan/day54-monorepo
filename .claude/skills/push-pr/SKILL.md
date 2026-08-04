@@ -39,6 +39,10 @@ Types: `feat`, `fix`, `chore`, `ci`, `docs`, `refactor`, `test`. Scan the staged
 Write the description from the **full cumulative diff against the base** (`git diff origin/develop...HEAD`), never from just the latest commit. Write it to a file (scratchpad) and pass it with `--body-file`. Never let GitHub prefill the body from the commit message — a commit message is not a PR description. It MUST be detailed — cover every section that applies; drop only sections that are truly empty:
 
 ```markdown
+## Ticket
+
+[<planner ID> — <ticket summary>](<Asana permalink>)
+
 ## Summary
 
 2–4 sentences: what this PR does and why it exists. Written for
@@ -67,6 +71,14 @@ Concrete steps or commands a reviewer can run to verify.
 
 Known limitations, follow-ups, security considerations.
 ```
+
+**`## Ticket`** applies when the work carries a planner ID (`WEB-XXX-N` in the branch name, commit scope, or conversation). Resolve the Asana permalink from the planner state files — never guess or search Asana by name:
+
+```bash
+jq -r '.issues["<planner-ID>"].permalink // empty' .claude/ticket-planner/dry-runs/*/state*.json
+```
+
+If the ID isn't in any state file (or there is no ticket), drop the section. For a sub-task, link the sub-task itself, not its parent story.
 
 End the body with:
 
