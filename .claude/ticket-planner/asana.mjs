@@ -102,15 +102,40 @@ export function die(message) {
 
 let cachedToken;
 
+// Fallback credential source: .claude/.env (gitignored — see repo .gitignore).
+// Accepts ASANA_TOKEN or ASANA_ACCESS_TOKEN (the latter matches the
+// ASANA_ACCESS_TOKEN repo secret used by .github/workflows/asana-sync.yml).
+const ENV_FILE = new URL("../.env", import.meta.url);
+
+function tokenFromEnvFile() {
+  let text;
+  try {
+    text = fs.readFileSync(ENV_FILE, "utf8");
+  } catch {
+    return undefined;
+  }
+  for (const line of text.split("\n")) {
+    const match = line.match(
+      /^\s*(?:export\s+)?(?:ASANA_TOKEN|ASANA_ACCESS_TOKEN)\s*=\s*(.*?)\s*$/,
+    );
+    if (match) return match[1].replace(/^(["'])(.*)\1$/, "$2");
+  }
+  return undefined;
+}
+
 export function token() {
   if (cachedToken) return cachedToken;
-  const value = process.env.ASANA_TOKEN;
+  const value =
+    process.env.ASANA_TOKEN ||
+    process.env.ASANA_ACCESS_TOKEN ||
+    tokenFromEnvFile();
   if (!value || !value.trim()) {
     die(
-      "ASANA_TOKEN is not set.\n" +
+      "No Asana token found.\n" +
         "  Create a personal access token at https://app.asana.com/0/my-apps\n" +
-        "  then export it for this shell only:  export ASANA_TOKEN=…\n" +
-        "  Never write it into a file in this repo.",
+        "  then either export it for this shell only:  export ASANA_TOKEN=…\n" +
+        "  or put it in the gitignored env file:  echo 'ASANA_ACCESS_TOKEN=…' > .claude/.env\n" +
+        "  Never write it into a tracked file in this repo.",
     );
   }
   cachedToken = value.trim();
@@ -217,10 +242,13 @@ export async function request(method, endpoint, body = null, { query } = {}) {
         payload?.errors?.map((error) => error.message).join("; ") ??
         payload.raw ??
         response.statusText;
-      throw new AsanaError(`${method} ${endpoint} → ${response.status}: ${detail}`, {
-        status: response.status,
-        body: payload,
-      });
+      throw new AsanaError(
+        `${method} ${endpoint} → ${response.status}: ${detail}`,
+        {
+          status: response.status,
+          body: payload,
+        },
+      );
     }
 
     return payload.data ?? payload;
@@ -243,7 +271,10 @@ export async function getAll(endpoint, query = {}) {
   do {
     const url = buildUrl(endpoint, { limit: 100, ...query, offset });
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token()}`, Accept: "application/json" },
+      headers: {
+        Authorization: `Bearer ${token()}`,
+        Accept: "application/json",
+      },
     });
 
     if (response.status === 429) {
@@ -316,7 +347,10 @@ function inlineToHtml(text) {
     .replace(INLINE_CODE, (_, code) => `<code>${code}</code>`)
     .replace(BOLD, (_, inner) => `<strong>${inner}</strong>`)
     .replace(ITALIC, (_, lead, inner) => `${lead}<em>${inner}</em>`)
-    .replace(LINK, (_, label, href) => `<a href="${href}">${label || href}</a>`);
+    .replace(
+      LINK,
+      (_, label, href) => `<a href="${href}">${label || href}</a>`,
+    );
 }
 
 /** Inline html → inline markdown. The exact inverse of inlineToHtml. */
@@ -347,7 +381,9 @@ function inlineToMarkdown(html) {
  * every sync.
  */
 export function markdownToHtmlNotes(markdown) {
-  const lines = String(markdown ?? "").replace(/\r\n/g, "\n").split("\n");
+  const lines = String(markdown ?? "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
   const blocks = [];
 
   let paragraph = [];
@@ -466,7 +502,9 @@ export function htmlNotesToMarkdown(htmlNotes) {
       // A lone newline inside a text run is a soft wrap — Asana's editor makes
       // them freely. Collapse to a space so the projection is idempotent; this
       // is the documented "paragraph wrapping collapses" limitation.
-      const text = inlineToMarkdown(part).replace(/\s*\n\s*/g, " ").trim();
+      const text = inlineToMarkdown(part)
+        .replace(/\s*\n\s*/g, " ")
+        .trim();
       if (text) out.push(text);
     }
   };
@@ -501,7 +539,9 @@ export function htmlNotesToMarkdown(htmlNotes) {
       // line between them, or re-parsing would read each as its own list.
       const items = [...content.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(
         (item, index) => {
-          const text = inlineToMarkdown(item[1]).replace(/\s*\n\s*/g, " ").trim();
+          const text = inlineToMarkdown(item[1])
+            .replace(/\s*\n\s*/g, " ")
+            .trim();
           return tag === "ol" ? `${index + 1}. ${text}` : `- ${text}`;
         },
       );
@@ -550,7 +590,11 @@ export function buildCustomFields({ priority, storyPoints } = {}) {
     fields[CONFIG.PRIORITY_FIELD_GID] = optionGid;
   }
 
-  if (CONFIG.STORY_POINTS_FIELD_GID && storyPoints !== null && storyPoints !== undefined) {
+  if (
+    CONFIG.STORY_POINTS_FIELD_GID &&
+    storyPoints !== null &&
+    storyPoints !== undefined
+  ) {
     fields[CONFIG.STORY_POINTS_FIELD_GID] = storyPoints;
   }
 
@@ -753,7 +797,8 @@ async function promptLine(question) {
 
 function renderConstantsBlock(discovered) {
   const options = PRIORITIES.map(
-    (name) => `    ${name}: ${JSON.stringify(discovered.priorityOptions[name] ?? null)},`,
+    (name) =>
+      `    ${name}: ${JSON.stringify(discovered.priorityOptions[name] ?? null)},`,
   ).join("\n");
 
   return `export const CONFIG = {
@@ -857,7 +902,9 @@ async function setup() {
     console.log("  (none)");
   } else {
     for (const field of fields) {
-      console.log(`  - ${field.name} [${field.resource_subtype}] (${field.gid})`);
+      console.log(
+        `  - ${field.name} [${field.resource_subtype}] (${field.gid})`,
+      );
     }
   }
 
@@ -879,7 +926,10 @@ async function setup() {
           console.log(`  + created Priority (${priorityField.gid})`);
         }
         if (!storyPointsField) {
-          storyPointsField = await createStoryPointsField(workspace.gid, project.gid);
+          storyPointsField = await createStoryPointsField(
+            workspace.gid,
+            project.gid,
+          );
           console.log(`  + created Story Points (${storyPointsField.gid})`);
         }
       } catch (error) {
@@ -896,7 +946,8 @@ async function setup() {
   // existing one needs the enum_options we asked for above.
   const priorityOptions = {};
   for (const option of priorityField?.enum_options ?? []) {
-    if (PRIORITIES.includes(option.name)) priorityOptions[option.name] = option.gid;
+    if (PRIORITIES.includes(option.name))
+      priorityOptions[option.name] = option.gid;
   }
 
   const missingOptions = PRIORITIES.filter((name) => !priorityOptions[name]);
