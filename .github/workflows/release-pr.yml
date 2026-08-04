@@ -7,31 +7,44 @@ name: Release PR
 # "semver:<bump>" label — a human can re-label before merging to override.
 # The label is consumed by version-bump.yml when the PR merges.
 #
+# Triggers:
+# - pull_request opened/reopened on the two promotion lanes, plus synchronize:
+#   a human merge into develop moves an open promotion PR's head, so the
+#   description regenerates instead of going stale.
+# - workflow_dispatch: asana-sync dispatches this after pushing its planner
+#   bookkeeping commit to develop. That push uses the default GITHUB_TOKEN,
+#   which never creates pull_request events, so without the dispatch an open
+#   promotion PR would end on a head SHA this workflow never described.
+#   Dispatch runs resolve the open develop -> main PR themselves and no-op
+#   when there isn't one.
+#
 # Requires the ANTHROPIC_API_KEY repository secret.
 on:
   pull_request:
     types: [opened, reopened, synchronize]
     branches: [main, release]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
 
 concurrency:
-  group: release-pr-${{ github.event.pull_request.number }}
+  group: release-pr-${{ github.event.pull_request.number || 'dispatch' }}
   cancel-in-progress: true
 
 jobs:
   describe:
     name: Generate title, description, and semver judgement
     # Only the two promotion lanes — ordinary feature PRs are untouched.
+    # A dispatch run resolves its own lane (develop -> main) in the first step.
     if: >
+      github.event_name == 'workflow_dispatch' ||
       (github.base_ref == 'main' && github.head_ref == 'develop') ||
       (github.base_ref == 'release' && github.head_ref == 'main')
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,11 +55,38 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Collect merged PRs and commits in the promotion range
+      - name: Resolve the promotion PR
+        id: pr
         run: |
           set -euo pipefail
-          base="origin/${{ github.base_ref }}"
-          head="${{ github.event.pull_request.head.sha }}"
+          if [ "${{ github.event_name }}" = 'pull_request' ]; then
+            {
+              echo "number=${{ github.event.pull_request.number }}"
+              echo "base=${{ github.base_ref }}"
+              echo "head_branch=${{ github.head_ref }}"
+              echo "head_sha=${{ github.event.pull_request.head.sha }}"
+            } >> "$GITHUB_OUTPUT"
+          else
+            pr=$(gh pr list --base main --head develop --state open \
+              --json number,headRefOid --jq '.[0] // empty')
+            if [ -z "$pr" ]; then
+              echo "No open develop -> main promotion PR; nothing to describe."
+              exit 0
+            fi
+            {
+              echo "number=$(jq -r .number <<<"$pr")"
+              echo "base=main"
+              echo "head_branch=develop"
+              echo "head_sha=$(jq -r .headRefOid <<<"$pr")"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect merged PRs and commits in the promotion range
+        if: steps.pr.outputs.number != ''
+        run: |
+          set -euo pipefail
+          base="origin/${{ steps.pr.outputs.base }}"
+          head="${{ steps.pr.outputs.head_sha }}"
 
           # PR numbers from merge commits ("Merge pull request #N ...") and
           # squash-merge subjects ("... (#N)").
@@ -69,34 +109,41 @@ jobs:
           echo "Found $(jq length prs.json) PRs, $(wc -l < commits.txt) commits in range"
 
       - name: Install script dependencies
+        if: steps.pr.outputs.number != ''
         run: npm ci --prefix .github/scripts
 
       - name: Generate title and description with Claude
+        if: steps.pr.outputs.number != ''
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          BASE_BRANCH: ${{ github.base_ref }}
-          HEAD_BRANCH: ${{ github.head_ref }}
-          INCLUDE_BUMP: ${{ github.base_ref == 'main' && 'true' || 'false' }}
+          BASE_BRANCH: ${{ steps.pr.outputs.base }}
+          HEAD_BRANCH: ${{ steps.pr.outputs.head_branch }}
+          INCLUDE_BUMP: ${{ steps.pr.outputs.base == 'main' && 'true' || 'false' }}
           PR_DATA_FILE: prs.json
           COMMITS_FILE: commits.txt
         run: |
           set -euo pipefail
-          CURRENT_VERSION=$(git show "origin/${{ github.base_ref }}:package.json" | jq -r .version)
+          CURRENT_VERSION=$(git show "origin/${{ steps.pr.outputs.base }}:package.json" | jq -r .version)
           export CURRENT_VERSION
           node .github/scripts/release-pr.mjs > result.json
 
       - name: Apply title and description to the PR
+        if: steps.pr.outputs.number != ''
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           set -euo pipefail
           title=$(jq -r .title result.json)
           jq -r .description result.json > body.md
           extra=''
-          if [ "${{ github.base_ref }}" = 'main' ]; then extra=', and semver judgement'; fi
+          if [ "${{ steps.pr.outputs.base }}" = 'main' ]; then extra=', and semver judgement'; fi
           printf '\n---\n_Title, description%s generated by Claude from the merged PRs (release-pr.yml). Re-runs on every push to this PR._\n' "$extra" >> body.md
           gh pr edit "$PR_NUMBER" --title "$title" --body-file body.md
 
       - name: Apply semver label (develop -> main only)
-        if: github.base_ref == 'main'
+        if: steps.pr.outputs.number != '' && steps.pr.outputs.base == 'main'
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           set -euo pipefail
           bump=$(jq -r .bump result.json)

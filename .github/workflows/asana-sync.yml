@@ -147,6 +147,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # gh pr list in the refresh step; job-level permissions replace the
+      # workflow-level map, so read access must be restated here.
+      pull-requests: read
+      # gh workflow run release-pr.yml
+      actions: write
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PR_TITLE: ${{ github.event.pull_request.title }}
@@ -157,6 +162,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.ref }}
       - name: Mark planner tickets done
+        id: mark
         shell: bash
         run: |
           set -euo pipefail
@@ -183,8 +189,32 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .claude/ticket-planner/dry-runs
-          # [skip ci] keeps this bookkeeping commit from triggering the
-          # push-to-develop workflows (tag-release, docs drift).
-          git commit -m "chore(tickets): record ${keys} done after PR #${PR_NUMBER} [skip ci]"
+          # No [skip ci] here. This push uses the default GITHUB_TOKEN, which
+          # never creates workflow runs, so the push-to-develop workflows
+          # (tag-release, docs drift) stay quiet anyway — while a [skip ci]
+          # in develop's tip commit message suppresses EVERY pull_request
+          # workflow (release-pr, CI) on a promotion PR opened from it.
+          git commit -m "chore(tickets): record ${keys} done after PR #${PR_NUMBER}"
           git pull --rebase origin "$BASE_BRANCH"
           git push origin HEAD:"$BASE_BRANCH"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      # The bookkeeping push above cannot fire pull_request events (default
+      # GITHUB_TOKEN), so an open develop -> main promotion PR would sit on a
+      # head SHA release-pr.yml never described. workflow_dispatch is exempt
+      # from that suppression — dispatch a refresh; the dispatched run
+      # resolves the open PR itself and no-ops if it closed in the meantime.
+      - name: Refresh the open promotion PR description
+        if: steps.mark.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          open_pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head develop \
+            --state open --json number --jq '.[0].number // empty')
+          if [ -z "$open_pr" ]; then
+            echo "No open develop -> main promotion PR; nothing to refresh."
+            exit 0
+          fi
+          gh workflow run release-pr.yml --repo "$GITHUB_REPOSITORY" --ref develop
+          echo "Dispatched release-pr.yml to refresh PR #${open_pr}."
