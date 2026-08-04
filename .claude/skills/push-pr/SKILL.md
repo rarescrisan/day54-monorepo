@@ -1,6 +1,6 @@
 ---
 name: push-pr
-description: Ship the current work to GitHub end-to-end — write a proper commit message, push the branch, write a detailed PR description, and open the PR. Use whenever the user asks to push, commit and push, "make a PR", "ship this", or open/update a pull request in this repo.
+description: Ship the current work to GitHub end-to-end — write a proper commit message, push the branch, write a detailed PR description, and open the PR. On later pushes to the same branch, regenerate the description from the cumulative diff and update the open PR. Use whenever the user asks to push, commit and push, "make a PR", "ship this", or open/update a pull request in this repo.
 ---
 
 # Push & open a PR
@@ -36,7 +36,7 @@ Types: `feat`, `fix`, `chore`, `ci`, `docs`, `refactor`, `test`. Scan the staged
 
 ## 4. PR description
 
-Write the description to a file (scratchpad) and pass it with `--body-file`. It MUST be detailed — cover every section that applies; drop only sections that are truly empty:
+Write the description from the **full cumulative diff against the base** (`git diff origin/develop...HEAD`), never from just the latest commit. Write it to a file (scratchpad) and pass it with `--body-file`. Never let GitHub prefill the body from the commit message — a commit message is not a PR description. It MUST be detailed — cover every section that applies; drop only sections that are truly empty:
 
 ```markdown
 ## Summary
@@ -87,3 +87,13 @@ gh pr create --base develop --head <branch> --title "<same as commit summary>" -
 
 - Report the PR URL.
 - Check CI status once (`gh pr checks <number>`); if checks fail, read the failure logs and report the actual cause — distinguish code failures from infra issues (e.g. runner/billing problems).
+
+## 7. Subsequent pushes to the same branch — keep the description current
+
+Every time you push more commits to a branch that already has an open PR (check with `gh pr list --head <branch>`), the description MUST be brought back in sync with the full diff:
+
+1. Regenerate the body from `git diff origin/develop...HEAD` (cumulative, not just the new commit), reusing the same template — update `## Changes`, and revisit `## Summary`, `## Setup / config required`, and `## How to test` if the new commits changed them.
+2. Apply it: `gh pr edit <number> --body-file <path>`.
+3. If `gh pr edit` fails with the account-permissions error (see step 5), copy the body to the clipboard (`pbcopy < <path>`), tell the user it's ready to paste into the PR's edit box, and give them the `gh pr edit --body-file` command to run after `gh auth switch --user rarescrisan`.
+
+A PR whose description describes only the first commit is treated as a bug in this flow, not an acceptable state.
