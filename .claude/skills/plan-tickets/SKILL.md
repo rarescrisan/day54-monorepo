@@ -78,25 +78,70 @@ needing more than 6 is a story to split, not a longer checklist. Sub-tasks are h
 progress becomes visible mid-story and how `work-ticket` gets a checklist — a plan whose
 stories have no sub-tasks is almost always too coarse.
 
-**Story description template** — the `## Acceptance` section is what `work-ticket` later
-verifies against, so write it as commands and observable outcomes, not intentions:
+**Story description template** — three sections, written dense enough that an
+implementer can code against the ticket without reopening the source doc:
+
+- **Context** — a few packed lines, not a paragraph of scene-setting: the source-doc
+  section this implements (`RFC §6.3`), the closest existing code it mirrors and the
+  one-line way this differs from it, the behavioral posture in one sentence
+  ("failures shed silently, never retry, never throw into the inbox query"), and the
+  exact path of the primary artifact.
+- **Requirements** — one bullet per behavior, at code-against precision:
+  - Exact outcome per case, never a category: "On 429: log the `Retry-After` header
+    at warn, return `null` — no retry, no sleep", not "handle rate limiting".
+  - Name mechanisms and sources exactly: "native fetch with a 5s `AbortController`
+    timeout", "all from `ConfigKey.ZENDESK` — never `process.env`".
+  - State negative constraints in the bullet where they'd be violated, **with the
+    reason**: a prohibition without its why gets optimized away by a later reader.
+  - Where behavior deviates from the mirrored code, say so explicitly ("unlike the
+    CIO client, which logs bodies at debug").
+  - Enumerate the exact surface the consumer needs (methods, endpoints, params) and
+    name wiring points as files ("new event constant in
+    `common/constants/alert.constants.ts`").
+- **Acceptance** — what `work-ticket` later verifies against: every bullet checkable
+  by a command or observable outcome, not an intention.
+  - Coverage living in another ticket is fine — name it by planner ID plus the
+    scenarios it must prove.
+  - Every negative constraint gets a mechanical check ("`git grep` of the client
+    shows no logging of response bodies or emails").
+  - End with the repo gates that must pass (lint/typecheck/test commands).
+
+Exemplar (borrowed from another codebase — copy the density, not the stack):
 
 ```markdown
 ## Context
 
-Why this exists, and what in the codebase it touches today.
+RFC §6.3. Thin fetch wrapper mirroring `CustomerIoHttpClient`, but hardened for an
+account-wide rate limit: failures shed silently, never retry, never throw into the
+inbox query. Lives at
+`apps/api/src/modules/inbox-support/services/zendesk-http.client.ts`.
 
 ## Requirements
 
-- Concrete, file-level where possible.
+- Basic auth as `{email}/token:{api_token}` against `https://{subdomain}.zendesk.com`
+  (all from `ConfigKey.ZENDESK` — never `process.env`).
+- Native fetch with a 5s `AbortController` timeout on every request.
+- On 429: log the `Retry-After` header at warn, return `null` — no retry, no sleep.
+- On any non-2xx or timeout: log and return `null`.
+- Logging: new event constant in `common/constants/alert.constants.ts`; NEVER log
+  the user email or any response body — ticket payloads contain customer-written
+  support text (unlike the CIO client, which logs bodies at debug). Log `ticket_id`
+  / `comment_id` only.
+- Methods for the four calls the adapter needs: user search by `external_id`, user
+  search by email query, `PUT /api/v2/users/{id}.json` (external_id write-back),
+  requested-tickets list, ticket comments (the latter two with the query params
+  from RFC §6.2).
 
 ## Acceptance
 
-- `pnpm turbo run test --filter web` passes.
-- Navigating to /settings as a signed-out user redirects to /login.
+- Covered by the adapter/poll integration specs (NS-ZD-11) against wiremock: 429,
+  timeout, and 5xx responses all produce null/no-op without throwing.
+- `git grep` of the client shows no logging of response bodies or emails.
+- Lint passes (no-console, no `any`, explicit return types).
 ```
 
-Sub-task descriptions are one or two lines — the file to touch and the shape of the change.
+Sub-task descriptions are one or two lines at the same precision — the file to touch,
+the shape of the change, and any negative constraint that sub-task alone could violate.
 
 **Markdown subset.** Descriptions are converted to Asana `html_notes` by `asana.mjs`.
 Supported: headings, paragraphs, `-`/`*` bullets, `1.` ordered lists, `---` rules, and
