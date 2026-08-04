@@ -130,7 +130,9 @@ const FIELDS = {
     // so this field declares a custom writer instead.
     remoteWriter: async (gid, value, task) => {
       const desired = new Set(value ?? []);
-      const current = new Map((task.tags ?? []).map((tag) => [tag.name, tag.gid]));
+      const current = new Map(
+        (task.tags ?? []).map((tag) => [tag.name, tag.gid]),
+      );
 
       for (const [name, tagGid] of current) {
         if (!desired.has(name)) {
@@ -152,17 +154,19 @@ const FIELDS = {
     toLocal: (ticket, value) => {
       ticket.priority = value;
     },
-    toRemote: (value) => ({ custom_fields: buildCustomFields({ priority: value }) }),
+    toRemote: (value) => ({
+      custom_fields: buildCustomFields({ priority: value }),
+    }),
   },
 
   story_points: {
     enabled: () => Boolean(CONFIG.STORY_POINTS_FIELD_GID),
-    // Points only mean anything on a Story; every other type reads null on
-    // both sides, so the field is permanently in-sync for them.
-    appliesTo: (ticket) => ticket.type === "Story",
+    // Points ladder up: sub-tasks carry 1–3, a story's points is the sum of
+    // its sub-tasks, an epic's the sum of its stories — so every type syncs.
     local: (ticket) => ticket.story_points ?? null,
     remote: (task) => readStoryPoints(task),
-    comparable: (value) => (value === null || value === undefined ? "" : String(value)),
+    comparable: (value) =>
+      value === null || value === undefined ? "" : String(value),
     toLocal: (ticket, value) => {
       ticket.story_points = value;
     },
@@ -228,7 +232,8 @@ const mapped = tickets.filter((ticket) => {
 
 const unmapped = tickets.filter(
   (ticket) =>
-    (!only || only.includes(ticket.local_id)) && !state.issues[ticket.local_id]?.gid,
+    (!only || only.includes(ticket.local_id)) &&
+    !state.issues[ticket.local_id]?.gid,
 );
 
 if (only) {
@@ -312,7 +317,9 @@ function printReport(rows) {
   for (const row of rows) {
     if (row.gone) {
       console.log(`${row.localId}  [gone] — GID in state.json returns 404`);
-      console.log("    The local row is left alone. Delete it, or re-create the task.");
+      console.log(
+        "    The local row is left alone. Delete it, or re-create the task.",
+      );
       drifted += 1;
       continue;
     }
@@ -432,8 +439,7 @@ if (mode === "push" || mode === "pull") {
     });
 
     skipped += row.fields.filter(
-      (field) =>
-        field.status !== STATUS.IN_SYNC && !targets.includes(field),
+      (field) => field.status !== STATUS.IN_SYNC && !targets.includes(field),
     ).length;
 
     if (targets.length === 0) continue;
@@ -496,7 +502,9 @@ if (mode === "push" || mode === "pull") {
 
   if (localFileChanged.length > 0) writeTickets(args.input, tickets);
 
-  console.log(`\n✓ ${written} field(s) ${mode === "push" ? "pushed" : "pulled"}`);
+  console.log(
+    `\n✓ ${written} field(s) ${mode === "push" ? "pushed" : "pulled"}`,
+  );
   if (skipped > 0) {
     console.log(
       `  ${skipped} drifted field(s) left alone (wrong direction, or a ` +
@@ -546,7 +554,9 @@ if (mode === "pull-new") {
   }
 
   if (discovered.length === 0) {
-    console.log("✓ nothing new — every subtask of a mapped task already has a row");
+    console.log(
+      "✓ nothing new — every subtask of a mapped task already has a row",
+    );
     process.exit(0);
   }
 
@@ -582,7 +592,7 @@ if (mode === "pull-new") {
       summary: task.name ?? "(untitled)",
       priority: readPriority(task) ?? "P3",
       labels: (task.tags ?? []).map((tag) => tag.name),
-      story_points: isStory ? readStoryPoints(task) : null,
+      story_points: readStoryPoints(task) ?? null,
       description_markdown: htmlNotesToMarkdown(task.html_notes ?? ""),
     };
 

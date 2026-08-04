@@ -29,19 +29,19 @@ import path from "node:path";
 // degraded mode for that field: it is neither written nor synced. That is the
 // correct state on a free Asana tier, where custom fields are unavailable.
 export const CONFIG = {
-  WORKSPACE_GID: null,
-  PROJECT_GID: null,
+  WORKSPACE_GID: "1217079558452780",
+  PROJECT_GID: "1217137770260769",
   // Who new tasks are assigned to. null leaves them unassigned.
-  DEFAULT_ASSIGNEE_GID: null,
-  PRIORITY_FIELD_GID: null,
+  DEFAULT_ASSIGNEE_GID: "1217079558452767",
+  PRIORITY_FIELD_GID: "1217137534580036",
   PRIORITY_OPTION_GIDS: {
-    P1: null,
-    P2: null,
-    P3: null,
-    P4: null,
-    P5: null,
+    P1: "1217137534580037",
+    P2: "1217137534580038",
+    P3: "1217137534580039",
+    P4: "1217137534580040",
+    P5: "1217137534580041",
   },
-  STORY_POINTS_FIELD_GID: null,
+  STORY_POINTS_FIELD_GID: "1217137515501531",
 };
 
 export const PRIORITIES = ["P1", "P2", "P3", "P4", "P5"];
