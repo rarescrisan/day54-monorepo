@@ -33,7 +33,10 @@ in `apps/web` calls `apps/api` — the browser has no dependency on the service.
 
 ## Data and persistence
 
-None. No database and no external services. The only environment-dependent
+No database. One external service: the `GET /api/pokemon` route handler in
+`apps/web` proxies PokeAPI. Its upstream and sprite base URLs are module
+constants in `apps/web/src/app/api/pokemon/route.ts`, not env vars — they are
+neither secret nor environment-dependent. The only environment-dependent
 config is `PORT` (read by `apps/api`, defaulting to 3001) — declared in
 `turbo.json`'s `globalEnv` so the ESLint rule against undeclared env vars
 passes.

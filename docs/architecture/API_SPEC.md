@@ -6,9 +6,24 @@ If this file and the code disagree, the code is right — fix this file.
 
 ## Current surface
 
-`apps/web` has no route handlers, no Server Actions and no middleware — it
-serves only statically rendered pages. The HTTP surface below belongs to
+`apps/web` has one route handler, no Server Actions and no middleware — every
+other route is a statically rendered page. `GET /health` below belongs to
 `apps/api` (NestJS, port 3001 by default, overridable with `PORT`).
+
+### `GET /api/pokemon`
+
+- **Handler:** `apps/web/src/app/api/pokemon/route.ts`
+- **Auth:** none — an unauthenticated read-only proxy
+- **Request:** query parameters validated by `pokemonQuerySchema`, yielding an
+  `offset` and a `limit`
+- **Response:** `200` with
+  `{ items: [{ id, name, spriteUrl }], nextOffset }`, where `id` is taken from
+  the trailing segment of the upstream item URL, `spriteUrl` points at the
+  PokeAPI sprites repository, and `nextOffset` is `offset + limit` or `null`
+  when upstream reports no next page. `400` with `{ error }` when the query
+  parameters fail validation — upstream is not called. `502` with `{ error }`
+  when upstream answers non-2xx, the request fails, or the body is not JSON
+- **Side effects:** none of its own; issues one outbound request to PokeAPI
 
 ### `GET /health`
 
