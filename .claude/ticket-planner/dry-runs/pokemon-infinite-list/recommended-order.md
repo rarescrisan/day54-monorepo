@@ -12,7 +12,7 @@ ladder up: sub-tasks sum to their story, stories (7 + 8 + 4 = 19) to the epic.
   — no dependencies. Everything else builds against the response shape and
   error contract this ticket pins with tests.
   1. ✅ WEB-POKE-1.1 — add `zod` + `msw`, pinned exactly (1 pt)
-  2. WEB-POKE-1.2 — `pokemonQuerySchema` + `PokemonPage` types (1 pt)
+  2. ✅ WEB-POKE-1.2 — `pokemonQuerySchema` + `PokemonPage` types (1 pt)
   3. WEB-POKE-1.3 — GET handler: proxy, reshape, 400/502 paths (2 pts)
   4. WEB-POKE-1.4 — module-level `Map` cache (1 pt)
   5. WEB-POKE-1.5 — `route.test.ts` with MSW node server (2 pts)

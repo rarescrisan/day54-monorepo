@@ -25,7 +25,10 @@
     },
     "WEB-POKE-1.2": {
       "gid": "1217137775786659",
-      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137775786659"
+      "permalink": "https://app.asana.com/1/1217079558452780/task/1217137775786659",
+      "status": "done",
+      "done_at": "2026-08-04",
+      "done_pr": "https://github.com/rarescrisan/day54-monorepo/pull/7"
     },
     "WEB-POKE-1.3": {
       "gid": "1217137834542680",
@@ -72,7 +75,11 @@
       "permalink": "https://app.asana.com/1/1217079558452780/task/1217153382584745"
     }
   },
-  "homed": ["WEB-POKE-1", "WEB-POKE-2", "WEB-POKE-3"],
+  "homed": [
+    "WEB-POKE-1",
+    "WEB-POKE-2",
+    "WEB-POKE-3"
+  ],
   "links": [
     "WEB-POKE-2<-WEB-POKE-1",
     "WEB-POKE-3<-WEB-POKE-1",
