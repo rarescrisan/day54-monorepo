@@ -33,14 +33,14 @@ If neither finds anything, the task was created outside the planner — adopt it
 
 ## 2. Load the context around it, in this order
 
-| Read | For |
-|---|---|
-| The JSONL row | Context / Requirements / Acceptance, points, labels |
-| Its sub-task rows (`parent_local_id == <id>`) | The implementation checklist |
-| `<dir>/README.md` | **Design decisions and pivots.** A story can be superseded while still open. |
-| `<dir>/recommended-order.md` | Where it sits in the build order, what it unblocks |
-| The RFC / handoff the README cites | The contract being implemented |
-| `docs/architecture/` (if present) | How the app fits together |
+| Read                                          | For                                                                          |
+| --------------------------------------------- | ---------------------------------------------------------------------------- |
+| The JSONL row                                 | Context / Requirements / Acceptance, points, labels                          |
+| Its sub-task rows (`parent_local_id == <id>`) | The implementation checklist                                                 |
+| `<dir>/README.md`                             | **Design decisions and pivots.** A story can be superseded while still open. |
+| `<dir>/recommended-order.md`                  | Where it sits in the build order, what it unblocks                           |
+| The RFC / handoff the README cites            | The contract being implemented                                               |
+| `docs/architecture/` (if present)             | How the app fits together                                                    |
 
 If the README says the approach was reversed, stop and confirm with the user before building
 the superseded design.
@@ -106,5 +106,9 @@ Then stop. Do not commit, push, or open a PR unless asked.
 - Pre-push runs lint + typecheck + tests; expect a minute or two.
 - PRs target `develop`, not `main`.
 
-Asana column moves are not automated — move the card yourself. Nothing in
-`.claude/ticket-planner/` ever writes status, assignee, or completion.
+When the PR merges into `develop`, the asana-sync workflow closes the loop from
+the PR title's planner ID: it comments on and completes the Asana task, and a
+sibling job runs `mark-done.mjs` to stamp `status: done` in `state*.json` and
+recompute `recommended-order.md`'s ✅/▶️/⏳ markers, committed back to `develop`.
+Pull before continuing to the next ticket. Column moves stay manual, and nothing
+in `.claude/ticket-planner/` writes assignee or Asana workflow state directly.

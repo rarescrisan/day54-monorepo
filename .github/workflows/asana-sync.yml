@@ -4,6 +4,10 @@ name: Asana sync
 #   1. Comments on every linked Asana task with the PR title + URL
 #   2. Moves each task to the section named in ASANA_TARGET_SECTION
 #      (and/or marks it complete, see ASANA_MARK_COMPLETE)
+#   3. Mirrors the same event into the repo's planner files (separate job):
+#      state*.json gets status: done and recommended-order.md gets its
+#      ✅/▶️/⏳ markers recomputed, committed back to the base branch —
+#      so Asana and .claude/ticket-planner/ never disagree about what shipped.
 #
 # Tasks are linked by putting an Asana task URL in the PR description,
 # or an `asana-<task-gid>` token in the branch name. Both URL formats work:
@@ -134,3 +138,53 @@ jobs:
             echo "::error::${failures} Asana API call(s) failed — see warnings above."
             exit 1
           fi
+
+  # Mirror the merge into the planner's local files so the repo and Asana
+  # stay in two-way sync. Runs independently of the Asana job: a flaky Asana
+  # API call must not leave the repo side unrecorded (or vice versa).
+  update-planner-files:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+      - name: Mark planner tickets done
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Planner IDs ride in the PR title scope (feat(WEB-POKE-1.1): …) per
+          # CLAUDE.md. mark-done.mjs skips anything that isn't a planner row,
+          # so over-matching here is harmless.
+          keys=$(printf '%s\n' "$PR_TITLE" \
+            | grep -oE '[A-Z]+(-[A-Z0-9]+)*-[0-9]+(\.[0-9]+)?' \
+            | sort -u | paste -sd, -) || true
+
+          if [ -z "$keys" ]; then
+            echo "No planner ID in the title of PR #${PR_NUMBER}; nothing to record."
+            exit 0
+          fi
+
+          node .claude/ticket-planner/mark-done.mjs --keys "$keys" --pr "$PR_URL"
+
+          if git diff --quiet; then
+            echo "Planner files already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .claude/ticket-planner/dry-runs
+          # [skip ci] keeps this bookkeeping commit from triggering the
+          # push-to-develop workflows (tag-release, docs drift).
+          git commit -m "chore(tickets): record ${keys} done after PR #${PR_NUMBER} [skip ci]"
+          git pull --rebase origin "$BASE_BRANCH"
+          git push origin HEAD:"$BASE_BRANCH"
