@@ -12,5 +12,8 @@ minimumReleaseAge: 10080
 # optimisation; unrs-resolver is the native resolver eslint-plugin-import-x uses
 # for `import/no-cycle`. Everything else installs with scripts blocked.
 allowBuilds:
+  # msw's postinstall only copies the browser Service Worker script; our tests
+  # use the node server, so scripts stay blocked.
+  msw: false
   sharp: true
   unrs-resolver: true
