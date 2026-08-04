@@ -32,8 +32,10 @@ jobs:
       # Section to move linked tasks into (matched case-insensitively in each
       # of the task's projects). Set to '' to skip the move.
       ASANA_TARGET_SECTION: "Done"
-      # Set to 'true' to also mark tasks complete on merge.
-      ASANA_MARK_COMPLETE: "false"
+      # Set to 'true' to also mark tasks complete on merge. Our tickets are
+      # sub-task-granular and Asana sub-tasks belong to no project, so the
+      # section move can't reach them — completion is the visible signal.
+      ASANA_MARK_COMPLETE: "true"
       # PR context via env (not inline interpolation) so PR bodies can't
       # inject shell commands.
       PR_NUMBER: ${{ github.event.pull_request.number }}
