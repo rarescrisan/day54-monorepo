@@ -1,0 +1,151 @@
+name: Architecture docs drift
+
+# Keeps docs/architecture/ honest. On every push to develop that touches source,
+# Claude reads the diff against the three specs and proposes corrections for
+# anything the code has made wrong or outgrown.
+#
+# This is a backstop. The primary mechanism is the maintain-architecture-docs
+# skill, which updates the specs in the same commit as the change — if this job
+# is regularly finding drift, that discipline is slipping.
+#
+# The result is always a PR, never a direct commit to develop:
+# - a human reviews doc edits before they become the reference
+# - develop is not rewritten by a bot
+#
+# The path filter deliberately omits docs/**, so merging this workflow's own
+# PR cannot trigger another run.
+#
+# Requires the ANTHROPIC_API_KEY repository secret. Without it the run fails
+# loudly rather than silently leaving the docs stale.
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "apps/**"
+      - "packages/**"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Queue rather than cancel: each run analyses its own commit range, and a
+# cancelled run would drop that range's changes on the floor.
+concurrency:
+  group: architecture-docs-drift
+  cancel-in-progress: false
+
+env:
+  DOCS_BRANCH: chore/architecture-docs-drift
+
+jobs:
+  drift:
+    name: Detect and correct spec drift
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the analysed range is computed with git diff/log.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Compute the pushed range
+        id: range
+        run: |
+          set -euo pipefail
+          before='${{ github.event.before }}'
+          head='${{ github.sha }}'
+
+          # A new branch, a force-push, or a rewritten history leaves `before`
+          # as the null SHA or pointing at an object we no longer have. Fall
+          # back to the single commit rather than diffing against nothing.
+          if [ -z "$before" ] || [ "$before" = '0000000000000000000000000000000000000000' ] \
+             || ! git cat-file -e "$before^{commit}" 2>/dev/null; then
+            before="$head^"
+          fi
+
+          echo "range=$before..$head" >> "$GITHUB_OUTPUT"
+          echo "Analysing $before..$head"
+
+      - name: Collect the diff and commit messages
+        env:
+          RANGE: ${{ steps.range.outputs.range }}
+        run: |
+          set -euo pipefail
+          # Same source paths as this workflow's trigger — the specs don't
+          # describe tests or the docs themselves.
+          pathspec=(-- apps packages)
+
+          git diff "$RANGE" "${pathspec[@]}" > diff.txt
+          git diff --stat "$RANGE" "${pathspec[@]}" > diffstat.txt
+          git log --no-merges --format='- %s%n%b' "$RANGE" "${pathspec[@]}" > commits.txt
+
+          echo "diff: $(wc -c < diff.txt) bytes, $(wc -l < diffstat.txt) files changed"
+
+      - name: Install script dependencies
+        run: npm ci --prefix .github/scripts
+
+      - name: Detect drift and edit the specs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RANGE: ${{ steps.range.outputs.range }}
+          DIFF_FILE: diff.txt
+          DIFFSTAT_FILE: diffstat.txt
+          COMMITS_FILE: commits.txt
+          RESULT_FILE: drift-result.json
+        run: node .github/scripts/docs-drift.mjs
+
+      - name: Open or update the docs PR
+        run: |
+          set -euo pipefail
+
+          if [ "$(jq -r .drift drift-result.json)" != 'true' ]; then
+            echo "No drift — specs left untouched."
+            jq -r .summary drift-result.json
+            exit 0
+          fi
+
+          # git diff is the authority on whether anything actually changed:
+          # every accepted edit was written to disk, but an edit whose
+          # replacement equals the original is a no-op.
+          if git diff --quiet -- docs/architecture; then
+            echo "Model reported drift but produced no net change."
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Rebuild the branch from this commit each run, so the PR always
+          # shows current develop plus one docs commit — never a stack of
+          # bot commits fixing each other.
+          git checkout -B "$DOCS_BRANCH"
+          git add docs/architecture
+          git commit -m "docs(architecture): sync specs with ${GITHUB_SHA:0:7}"
+          git push --force origin "$DOCS_BRANCH"
+
+          {
+            jq -r .summary drift-result.json
+            printf '\n## Edits applied\n\n'
+            jq -r '.applied[] | "- `\(.file)` — \(.reason)"' drift-result.json
+            if [ "$(jq -r '.failed | length' drift-result.json)" != '0' ]; then
+              printf '\n## Skipped\n\nThese edits were proposed but not applied — check them by hand:\n\n'
+              jq -r '.failed[] | "- `\(.file)` — \(.why). Intended: \(.reason)"' drift-result.json
+            fi
+            printf '\nSource range: `%s`\n' '${{ steps.range.outputs.range }}'
+            printf '\n---\n_Proposed by Claude from the diff that landed on develop (architecture-docs-drift.yml). Force-pushed on each qualifying push, so review the head commit rather than the PR history._\n'
+          } > body.md
+
+          existing=$(gh pr list --head "$DOCS_BRANCH" --base develop --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --body-file body.md
+            echo "Updated PR #$existing"
+          else
+            gh pr create --base develop --head "$DOCS_BRANCH" \
+              --title 'docs(architecture): sync specs with develop' \
+              --body-file body.md
+          fi

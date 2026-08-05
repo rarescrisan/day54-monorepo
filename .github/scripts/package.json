@@ -1,0 +1,9 @@
+{
+  "name": "ci-scripts",
+  "description": "CI-only scripts calling the Anthropic API for release-PR generation and architecture-docs drift detection. Not part of the app build.",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.115.0"
+  }
+}

@@ -1,0 +1,220 @@
+name: Asana sync
+
+# When a PR is merged into develop:
+#   1. Comments on every linked Asana task with the PR title + URL
+#   2. Moves each task to the section named in ASANA_TARGET_SECTION
+#      (and/or marks it complete, see ASANA_MARK_COMPLETE)
+#   3. Mirrors the same event into the repo's planner files (separate job):
+#      state*.json gets status: done and recommended-order.md gets its
+#      ✅/▶️/⏳ markers recomputed, committed back to the base branch —
+#      so Asana and .claude/ticket-planner/ never disagree about what shipped.
+#
+# Tasks are linked by putting an Asana task URL in the PR description,
+# or an `asana-<task-gid>` token in the branch name. Both URL formats work:
+#   https://app.asana.com/0/<project-gid>/<task-gid>
+#   https://app.asana.com/1/<workspace>/project/<project-gid>/task/<task-gid>
+#
+# Requires the ASANA_ACCESS_TOKEN repository secret (an Asana personal
+# access token / service-account token). Never hardcode it here.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  sync-asana:
+    # Only run on merge, not on close-without-merge
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    env:
+      ASANA_ACCESS_TOKEN: ${{ secrets.ASANA_ACCESS_TOKEN }}
+      # Section to move linked tasks into (matched case-insensitively in each
+      # of the task's projects). Set to '' to skip the move.
+      ASANA_TARGET_SECTION: "Done"
+      # Set to 'true' to also mark tasks complete on merge. Our tickets are
+      # sub-task-granular and Asana sub-tasks belong to no project, so the
+      # section move can't reach them — completion is the visible signal.
+      ASANA_MARK_COMPLETE: "true"
+      # PR context via env (not inline interpolation) so PR bodies can't
+      # inject shell commands.
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+      PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+      BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - name: Sync linked Asana tasks
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          if [ -z "${ASANA_ACCESS_TOKEN}" ]; then
+            echo "::error::ASANA_ACCESS_TOKEN secret is not set. Add it with: gh secret set ASANA_ACCESS_TOKEN"
+            exit 1
+          fi
+
+          api="https://app.asana.com/api/1.0"
+          auth=(-H "Authorization: Bearer ${ASANA_ACCESS_TOKEN}")
+
+          # --- Collect task GIDs from the PR body and branch name -----------
+          task_gids=$(
+            {
+              # Old-style URL: task gid is the last segment
+              printf '%s\n' "$PR_BODY" | grep -oE 'app\.asana\.com/0/[0-9]+/[0-9]{6,}' | grep -oE '[0-9]{6,}$'
+              # New-style URL: .../task/<gid>
+              printf '%s\n' "$PR_BODY" | grep -oE 'task/[0-9]{6,}' | grep -oE '[0-9]{6,}'
+              # Branch naming convention: feature/asana-1234567890-something
+              printf '%s\n' "$PR_BRANCH" | grep -oiE 'asana[-_/][0-9]{6,}' | grep -oE '[0-9]{6,}'
+            } | sort -u
+          ) || true
+
+          if [ -z "$task_gids" ]; then
+            echo "No Asana task references found in PR #${PR_NUMBER} (body or branch name). Nothing to sync."
+            exit 0
+          fi
+
+          echo "Found Asana task(s): $(echo "$task_gids" | tr '\n' ' ')"
+          failures=0
+
+          for gid in $task_gids; do
+            echo "--- Task ${gid} ---"
+
+            # 1) Attach the PR to the task as a comment
+            comment=$(jq -n \
+              --arg text "🔀 PR merged into ${BASE_BRANCH}: ${PR_TITLE} (#${PR_NUMBER}) — ${PR_URL}" \
+              '{data: {text: $text}}')
+            if curl -sf "${auth[@]}" -H 'Content-Type: application/json' \
+                -X POST -d "$comment" "${api}/tasks/${gid}/stories" > /dev/null; then
+              echo "Commented with PR link."
+            else
+              echo "::warning::Failed to comment on Asana task ${gid} (check the token has access to it)."
+              failures=$((failures + 1))
+              continue
+            fi
+
+            # 2) Move the task to the target section in each of its projects
+            if [ -n "$ASANA_TARGET_SECTION" ]; then
+              project_gids=$(curl -sf "${auth[@]}" \
+                "${api}/tasks/${gid}?opt_fields=projects.gid" | jq -r '.data.projects[].gid') || project_gids=""
+              moved=false
+              for pgid in $project_gids; do
+                section_gid=$(curl -sf "${auth[@]}" "${api}/projects/${pgid}/sections?opt_fields=name" \
+                  | jq -r --arg name "$ASANA_TARGET_SECTION" \
+                    '.data[] | select(.name | ascii_downcase == ($name | ascii_downcase)) | .gid' \
+                  | head -n1)
+                if [ -n "$section_gid" ]; then
+                  if curl -sf "${auth[@]}" -H 'Content-Type: application/json' \
+                      -X POST -d "$(jq -n --arg task "$gid" '{data: {task: $task}}')" \
+                      "${api}/sections/${section_gid}/addTask" > /dev/null; then
+                    echo "Moved to section '${ASANA_TARGET_SECTION}' in project ${pgid}."
+                    moved=true
+                  fi
+                fi
+              done
+              if [ "$moved" = false ]; then
+                echo "::warning::No section named '${ASANA_TARGET_SECTION}' found in task ${gid}'s project(s); task not moved."
+              fi
+            fi
+
+            # 3) Optionally mark the task complete
+            if [ "$ASANA_MARK_COMPLETE" = "true" ]; then
+              if curl -sf "${auth[@]}" -H 'Content-Type: application/json' \
+                  -X PUT -d '{"data": {"completed": true}}' "${api}/tasks/${gid}" > /dev/null; then
+                echo "Marked complete."
+              else
+                echo "::warning::Failed to mark Asana task ${gid} complete."
+                failures=$((failures + 1))
+              fi
+            fi
+          done
+
+          if [ "$failures" -gt 0 ]; then
+            echo "::error::${failures} Asana API call(s) failed — see warnings above."
+            exit 1
+          fi
+
+  # Mirror the merge into the planner's local files so the repo and Asana
+  # stay in two-way sync. Runs independently of the Asana job: a flaky Asana
+  # API call must not leave the repo side unrecorded (or vice versa).
+  update-planner-files:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # gh pr list in the refresh step; job-level permissions replace the
+      # workflow-level map, so read access must be restated here.
+      pull-requests: read
+      # gh workflow run release-pr.yml
+      actions: write
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+      - name: Mark planner tickets done
+        id: mark
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Planner IDs ride in the PR title scope (feat(WEB-POKE-1.1): …) per
+          # CLAUDE.md. mark-done.mjs skips anything that isn't a planner row,
+          # so over-matching here is harmless.
+          keys=$(printf '%s\n' "$PR_TITLE" \
+            | grep -oE '[A-Z]+(-[A-Z0-9]+)*-[0-9]+(\.[0-9]+)?' \
+            | sort -u | paste -sd, -) || true
+
+          if [ -z "$keys" ]; then
+            echo "No planner ID in the title of PR #${PR_NUMBER}; nothing to record."
+            exit 0
+          fi
+
+          node .claude/ticket-planner/mark-done.mjs --keys "$keys" --pr "$PR_URL"
+
+          if git diff --quiet; then
+            echo "Planner files already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .claude/ticket-planner/dry-runs
+          # No [skip ci] here. This push uses the default GITHUB_TOKEN, which
+          # never creates workflow runs, so the push-to-develop workflows
+          # (tag-release, docs drift) stay quiet anyway — while a [skip ci]
+          # in develop's tip commit message suppresses EVERY pull_request
+          # workflow (release-pr, CI) on a promotion PR opened from it.
+          git commit -m "chore(tickets): record ${keys} done after PR #${PR_NUMBER}"
+          git pull --rebase origin "$BASE_BRANCH"
+          git push origin HEAD:"$BASE_BRANCH"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      # The bookkeeping push above cannot fire pull_request events (default
+      # GITHUB_TOKEN), so an open develop -> main promotion PR would sit on a
+      # head SHA release-pr.yml never described. workflow_dispatch is exempt
+      # from that suppression — dispatch a refresh; the dispatched run
+      # resolves the open PR itself and no-ops if it closed in the meantime.
+      - name: Refresh the open promotion PR description
+        if: steps.mark.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          open_pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head develop \
+            --state open --json number --jq '.[0].number // empty')
+          if [ -z "$open_pr" ]; then
+            echo "No open develop -> main promotion PR; nothing to refresh."
+            exit 0
+          fi
+          gh workflow run release-pr.yml --repo "$GITHUB_REPOSITORY" --ref develop
+          echo "Dispatched release-pr.yml to refresh PR #${open_pr}."

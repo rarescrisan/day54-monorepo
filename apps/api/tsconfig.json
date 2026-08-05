@@ -1,0 +1,11 @@
+{
+  "extends": "@repo/typescript-config/nestjs.json",
+  "compilerOptions": {
+    // Path options must live here, not in the shared base: tsconfig resolves
+    // relative paths against the file that declares them, so an `outDir` in
+    // @repo/typescript-config emits into that package instead of this app.
+    "outDir": "dist"
+  },
+  "include": ["src", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

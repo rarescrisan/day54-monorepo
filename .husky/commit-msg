@@ -1,0 +1,54 @@
+#!/usr/bin/env sh
+
+commit_message_file=$1
+commit_message=$(cat "$commit_message_file")
+
+# Minimum length for commit messages
+min_length=15
+
+# Allow merge commits and commits that reference older commits (i.e., squash, rebase)
+case "$commit_message" in
+  "Merge "*)
+    echo "Merge commit detected. Skipping commit message validation."
+    exit 0
+    ;;
+esac
+
+if [ -f .git/CHERRY_PICK_HEAD ]; then
+  echo "Cherry-pick detected. Skipping commit message validation."
+  exit 0
+fi
+
+if [ -f .git/rebase-merge/interactive ]; then
+  echo "Rebase in progress. Skipping commit message validation."
+  exit 0
+fi
+
+# Conventional Commits. The optional "!" before ":" is the breaking-change
+# marker (e.g. "feat!: drop v1 endpoint") — tag-release.yml maps it to a
+# major bump.
+valid_commit_regex='^(feat|fix|chore|docs|style|refactor|test|build|ci|perf|revert|BREAKING CHANGE)(\(.+\))?!?: .{1,100}$'
+
+if ! echo "$commit_message" | grep -Eq "$valid_commit_regex"; then
+  echo "❌ Uh-oh! Your commit message doesn't follow the required format. 😓"
+  echo "✨ Please follow the Conventional Commits format:"
+  echo "  🛠️ feat(scope): add a new feature"
+  echo "  🐛 fix(scope): fix a bug"
+  echo "  🔧 chore(scope): some maintenance work"
+  echo "📝 Examples of valid commit messages:"
+  echo "  - feat(auth): add login functionality"
+  echo "  - fix(api): handle errors correctly in user endpoint"
+  echo "  - style(button): update primary button color"
+  echo "  - ci(github-actions): add cache for Node modules"
+  echo "🛑 Commit blocked. Please update your message and try again!"
+  exit 1
+fi
+
+if [ ${#commit_message} -lt $min_length ]; then
+  echo "⚠️ Your commit message is too short! It must be at least $min_length characters long."
+  echo "💡 Please provide more context in your message."
+  echo "🛑 Commit blocked. Add more details and try again."
+  exit 1
+fi
+
+echo "✅ Commit message looks good."

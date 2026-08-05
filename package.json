@@ -13,9 +13,26 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "e2e": "turbo run e2e",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "{apps,packages}/**/*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "{apps,packages}/**/*.{js,mjs,json,css}": [
+      "prettier --write"
+    ],
+    "*.{js,mjs,json,md,yaml,yml}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "eslint": "9.39.5",
+    "husky": "9.1.7",
+    "lint-staged": "17.2.0",
     "prettier": "3.9.6",
     "turbo": "2.10.6",
     "typescript": "5.9.3"

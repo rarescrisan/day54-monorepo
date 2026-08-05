@@ -1,0 +1,93 @@
+name: Tag release on develop
+
+# Tags every push to develop with a semver version derived from the
+# conventional commit messages (enforced by .husky/commit-msg) landed since
+# the previous v* tag, and publishes a GitHub Release with generated notes.
+#
+# Bump rules, applied to non-merge commits in the range:
+#   - any "BREAKING CHANGE"/"BREAKING-CHANGE" line, or a "type!:" subject → major
+#   - else any feat commit                                               → minor
+#   - else (fix, chore, docs, style, refactor, test, build, ci, perf, …) → patch
+#
+# Tags are the source of truth for what develop has shipped; package.json on
+# main (version-bump.yml) is the released-version truth. They are independent
+# by design — see the README's versioning section.
+#
+# Known limitation: a squash-merge bypasses the commit-msg hook (GitHub uses
+# the PR title), so a non-conventional squash title classifies as patch.
+# This repo uses merge commits on develop for exactly that reason.
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: write
+
+# Serialise version computation so two quick merges can't race the same tag.
+concurrency:
+  group: tag-release-develop
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + tags: the bump is computed from commits since the
+          # last v* tag, which a shallow clone can't see.
+          fetch-depth: 0
+
+      - name: Compute semver bump and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Strict X.Y.Z tags only: default git version-sort ranks
+          # v2.0.0-rc.1 ABOVE v2.0.0, so a stray prerelease tag must never
+          # be picked as the base.
+          last_tag=$(git tag --list 'v*' --sort=-v:refname | grep -E -m1 '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          if [ -n "$last_tag" ]; then
+            base=${last_tag#v}
+            range="$last_tag..HEAD"
+            echo "Last release tag: $last_tag"
+          else
+            base=$(node -p "require('./package.json').version")
+            range=""
+            echo "No previous release tag; seeding base version $base from package.json"
+          fi
+
+          if ! echo "$base" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Base version '$base' is not plain X.Y.Z; refusing to compute a bump." >&2
+            exit 1
+          fi
+
+          subjects=$(git log $range --no-merges --format='%s')
+          full_messages=$(git log $range --no-merges --format='%B')
+
+          if [ -z "$subjects" ]; then
+            echo "No non-merge commits in range '${range:-<full history>}'; nothing to version."
+            exit 0
+          fi
+
+          bump=patch
+          if echo "$full_messages" | grep -Eq '^BREAKING[- ]CHANGE' || echo "$subjects" | grep -Eq '^[a-z]+(\([^)]*\))?!:'; then
+            bump=major
+          elif echo "$subjects" | grep -Eq '^feat(\([^)]*\))?:'; then
+            bump=minor
+          fi
+
+          IFS=. read -r major minor patch <<< "$base"
+          case "$bump" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          version="v${major}.${minor}.${patch}"
+
+          echo "Bump: $bump → $version"
+          # Single atomic call: GitHub creates the tag and the release
+          # together, so a transient failure can never leave an orphan tag
+          # without a release.
+          gh release create "$version" --target "$GITHUB_SHA" --title "$version" --generate-notes
