@@ -1,10 +1,17 @@
-# Toolkit handoff — porting this repo's skills & workflows to another repo
+# Toolkit handoff — porting this repo's skills & git workflows to another repo
 
-This repo runs a complete Claude-Code-driven development system: coding-discipline
-skills, an Asana ticket planner with two-way sync, git hooks that enforce the flow,
-and GitHub Actions that close the loop from merged PR back to the ticket board.
+This repo runs a Claude-Code-driven development system: coding-discipline skills,
+an Asana ticket planner with two-way sync, husky hooks that enforce commit and
+branch hygiene, and GitHub Actions that close the loop from merged PR back to the
+ticket board.
 
-This document is the portable package manifest. It has two audiences:
+This document is the portable package manifest for **the skills and the git/ticket
+workflow only**. It deliberately does not carry over this repo's application stack
+(frameworks, package manager, linters, CI build pipeline) — those belong to each
+repo. The one piece of tooling that travels is husky, because the commit-message
+and branch-name hooks are what make the workflow enforceable.
+
+It has two audiences:
 
 - **A human** copying the toolkit into another repo — read "What's in the box",
   "How the pieces work", and the copy manifest.
@@ -18,11 +25,10 @@ This document is the portable package manifest. It has two audiences:
 If you are Claude Code running in a repo that is _not_ this one, and this document
 plus the copied files are your input, follow this procedure exactly:
 
-1. **Recon before asking.** Detect what you can from the target repo: package
-   manager (lockfile), frameworks (`package.json` deps, `pyproject.toml`, etc.),
-   monorepo layout, existing lint/typecheck/test commands, existing git hooks,
-   existing CI workflows, default branch, `git remote -v`. Never ask a question
-   the repo already answers — present detected values for confirmation instead.
+1. **Recon before asking.** Detect what you can from the target repo: default
+   branch, `git remote -v`, existing git hooks or hook manager, existing GitHub
+   workflows, Node availability. Never ask a question the repo already answers —
+   present detected values for confirmation instead.
 2. **Run the interview** (section "The interview" below). Ask the questions in
    grouped batches, not one at a time. Every blank in the Adaptation Map must be
    filled by either recon or an interview answer before you write anything.
@@ -35,27 +41,34 @@ plus the copied files are your input, follow this procedure exactly:
 5. **Report honestly.** A step you could not verify is reported as unverified, not
    as done.
 
+**Out of scope — do not port:** this repo's CI build workflow, lint/format
+tooling, code-style guidelines, or anything specific to its application stack.
+If the target repo wants pre-push checks, wire in _its own_ existing commands;
+never install this repo's toolchain to satisfy a hook.
+
 ---
 
 ## What's in the box
 
-| Component                | Path(s)                                                                                                                                                                     | Portability                                                                                           |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Behavioral guardrails    | `CLAUDE.md`                                                                                                                                                                 | Adapt — skills list carries over, ticket-ID section needs the new prefix                              |
-| Repo code conventions    | `.claude/WRITING_GUIDELINES.md`                                                                                                                                             | **Rewrite** — it documents _this_ repo's stack; its own rule says "don't add rules ahead of the code" |
-| 8 discipline skills      | `.claude/skills/{explore-before-coding, clarify-and-plan, surgical-diffs, respect-the-layers, complete-the-wiring, test-like-a-user, debug-root-cause, verify-before-done}` | **Copy as-is** — deliberately repo-agnostic                                                           |
-| 4 ticket-workflow skills | `.claude/skills/{plan-tickets, work-ticket, sync-tickets, kanban-review}`                                                                                                   | Adapt — board name, repo slug, branch names, ID prefix                                                |
-| Ship-it skill            | `.claude/skills/push-pr`                                                                                                                                                    | Adapt — base branch, branch allowlist, one repo-specific step to delete                               |
-| Architecture-docs skill  | `.claude/skills/maintain-architecture-docs`                                                                                                                                 | Optional — requires bootstrapping `docs/architecture/` specs first                                    |
-| Ticket planner scripts   | `.claude/ticket-planner/{asana.mjs, replay.mjs, sync.mjs, board.mjs, mark-done.mjs}`                                                                                        | Copy, then run `--setup` to fill the CONFIG block                                                     |
-| Planner manual           | `.claude/ticket-planner/asana-planner-guide.md`                                                                                                                             | Copy as-is — setup, sync model, every known Asana quirk                                               |
-| Dry-run scaffold         | `.claude/ticket-planner/dry-runs/README.md`                                                                                                                                 | Copy the README only — **not** the example initiative folders                                         |
-| Env template             | `.claude/.env.sample`                                                                                                                                                       | Copy (never copy a real `.env`)                                                                       |
-| Git hooks                | `.husky/{commit-msg, pre-commit, pre-push}`                                                                                                                                 | Adapt — check commands and branch regex                                                               |
-| CI                       | `.github/workflows/ci.yml`                                                                                                                                                  | Adapt — runtime versions and commands                                                                 |
-| Board ↔ repo loop        | `.github/workflows/asana-sync.yml`                                                                                                                                          | Adapt — base branch, target section, needs `ASANA_ACCESS_TOKEN` secret                                |
-| Release train            | `.github/workflows/{tag-release, release-pr, version-bump}.yml`                                                                                                             | Optional — assumes the develop/main promotion flow and merge commits                                  |
-| Docs-drift backstop      | `.github/workflows/architecture-docs-drift.yml`                                                                                                                             | Optional — only with the architecture-docs skill; needs `ANTHROPIC_API_KEY`                           |
+| Component                | Path(s)                                                                                                                                                                     | Portability                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Behavioral guardrails    | `CLAUDE.md`                                                                                                                                                                 | Adapt — skills list carries over; ticket-ID section needs the new prefix; strip stack-specific references |
+| 8 discipline skills      | `.claude/skills/{explore-before-coding, clarify-and-plan, surgical-diffs, respect-the-layers, complete-the-wiring, test-like-a-user, debug-root-cause, verify-before-done}` | **Copy as-is** — deliberately repo-agnostic                                                               |
+| 4 ticket-workflow skills | `.claude/skills/{plan-tickets, work-ticket, sync-tickets, kanban-review}`                                                                                                   | Adapt — board name, repo slug, branch names, ID prefix                                                    |
+| Ship-it skill            | `.claude/skills/push-pr`                                                                                                                                                    | Adapt — base branch, branch allowlist, one repo-specific step to delete                                   |
+| Architecture-docs skill  | `.claude/skills/maintain-architecture-docs`                                                                                                                                 | Optional — requires bootstrapping `docs/architecture/` specs first                                        |
+| Ticket planner scripts   | `.claude/ticket-planner/{asana.mjs, replay.mjs, sync.mjs, board.mjs, mark-done.mjs}`                                                                                        | Copy, then run `--setup` to fill the CONFIG block                                                         |
+| Planner manual           | `.claude/ticket-planner/asana-planner-guide.md`                                                                                                                             | Copy as-is — setup, sync model, every known Asana quirk                                                   |
+| Dry-run scaffold         | `.claude/ticket-planner/dry-runs/README.md`                                                                                                                                 | Copy the README only — **not** the example initiative folders                                             |
+| Env template             | `.claude/.env.sample`                                                                                                                                                       | Copy (never copy a real `.env`)                                                                           |
+| Commit hooks (husky)     | `.husky/{commit-msg, pre-push}`                                                                                                                                             | Adapt — keep the commit-format and branch-name enforcement; swap or drop the stack-specific check command |
+| Board ↔ repo loop        | `.github/workflows/asana-sync.yml`                                                                                                                                          | Adapt — base branch, target section, needs `ASANA_ACCESS_TOKEN` secret                                    |
+| Release train            | `.github/workflows/{tag-release, release-pr, version-bump}.yml`                                                                                                             | Optional — assumes the develop/main promotion flow and merge commits                                      |
+| Docs-drift backstop      | `.github/workflows/architecture-docs-drift.yml`                                                                                                                             | Optional — only with the architecture-docs skill; needs `ANTHROPIC_API_KEY`                               |
+
+**Not in the box** (stays behind, on purpose): `.github/workflows/ci.yml`,
+`.husky/pre-commit`, `.claude/WRITING_GUIDELINES.md`, and every lint/format/build
+setting — all of it is this repo's application stack, not the workflow.
 
 **Requirements:** Node ≥ 20.11 for the planner scripts (they use
 `import.meta.dirname`, zero npm dependencies). `gh` CLI authenticated with an
@@ -134,10 +147,12 @@ bullets → report), `sync-tickets` (the reconcile procedure), `kanban-review`
   branches must match `feature/ feat/ chore/ fix/ bugfix/ hotfix/ refactor/
 docs/` + name — enforced by the pre-push hook. Branch names are descriptive;
   the ticket ID goes in the commit scope, not the branch.
-- **Hooks (husky):** `commit-msg` enforces Conventional Commits (`type(scope)!?:
-subject`, ≥15 chars; `!` marks breaking). `pre-commit` runs `lint-staged`.
-  `pre-push` checks the branch-name allowlist then runs
-  `pnpm turbo run lint typecheck test`. Never bypassed with `--no-verify`.
+- **Hooks (husky) — the enforceable part of the workflow:** `commit-msg` enforces
+  Conventional Commits (`type(scope)!?: subject`, ≥15 chars; `!` marks breaking —
+  the release train derives semver from these). `pre-push` enforces the
+  branch-name allowlist above; its final line also runs this repo's own checks —
+  in the target repo, replace that line with the target's check command or delete
+  it. Hooks are never bypassed with `--no-verify`.
 - **PRs target `develop`.** The `push-pr` skill writes the commit message from the
   staged diff, the PR body from the _cumulative_ diff against the base
   (Ticket / Summary / Changes / How it works / Setup / How to test / Risks), links
@@ -148,15 +163,15 @@ subject`, ≥15 chars; `!` marks breaking). `pre-commit` runs `lint-staged`.
   section, and/or marks them complete (tasks linked via Asana URL in the PR body
   or planner ID in the PR title); an independent job extracts planner IDs from the
   PR title, runs `mark-done.mjs`, and commits the updated `state*.json` +
-  `recommended-order.md` back to the base branch, then dispatches
-  `release-pr.yml` to refresh any open develop → main promotion PR. Pull
-  `develop` before starting the next ticket.
+  `recommended-order.md` back to the base branch with `[skip ci]`. Pull `develop`
+  before starting the next ticket.
 - **Releases (optional adoption):** `tag-release.yml` tags every push to
   `develop` with a semver derived from conventional commit messages — **this
   requires merge commits; squash-merging degrades everything to a patch bump**.
   Promotion PRs `develop → main` get their title/description/semver label written
   by Claude (`release-pr.yml`, needs `ANTHROPIC_API_KEY`); on merge,
-  `version-bump.yml` bumps `package.json` on `main` per the label.
+  `version-bump.yml` bumps the version recorded on `main` per the label (it
+  assumes a `package.json` — adapt or skip in non-JS repos).
 - **Docs drift (optional):** `architecture-docs-drift.yml` has Claude re-read
   `docs/architecture/` against every source push to `develop` and open a
   correction PR. It is the backstop for the `maintain-architecture-docs` skill,
@@ -183,22 +198,24 @@ cp $SRC/.claude/ticket-planner/asana-planner-guide.md .claude/ticket-planner/
 cp $SRC/.claude/ticket-planner/dry-runs/README.md .claude/ticket-planner/dry-runs/
 cp $SRC/.claude/.env.sample .claude/
 
-# Hooks
-cp -R $SRC/.husky .
+# Hooks — commit-msg and pre-push only (pre-commit is this repo's lint stack)
+mkdir -p .husky
+cp $SRC/.husky/commit-msg $SRC/.husky/pre-push .husky/
 
-# Workflows — minimum viable set; the release train and docs-drift are opt-in
+# Workflows — asana-sync is the core; the release train and docs-drift are opt-in
 mkdir -p .github/workflows
-cp $SRC/.github/workflows/ci.yml $SRC/.github/workflows/asana-sync.yml .github/workflows/
+cp $SRC/.github/workflows/asana-sync.yml .github/workflows/
 # optional: tag-release.yml release-pr.yml version-bump.yml architecture-docs-drift.yml
 
-# Guardrails — starting points to adapt, not final
+# Guardrails — a starting point to adapt, not final
 cp $SRC/CLAUDE.md .
-cp $SRC/.claude/WRITING_GUIDELINES.md .claude/
 ```
 
 **Never copy:** `.claude/.env` (may hold a real token),
 `.claude/ticket-planner/dry-runs/<initiative>/` folders (they map _this_ repo's
-tickets to _this_ board — meaningless and misleading elsewhere).
+tickets to _this_ board — meaningless and misleading elsewhere),
+`.github/workflows/ci.yml`, `.husky/pre-commit`, or
+`.claude/WRITING_GUIDELINES.md` (all stack-specific, out of this handoff's scope).
 
 Also ensure the target repo's `.gitignore` covers `.claude/.env`.
 
@@ -208,24 +225,21 @@ Also ensure the target repo's `.gitignore` covers `.claude/.env`.
 
 Nothing below is optional to review. Interview answers (§ next) fill the blanks.
 
-| Where                                                                                | Hardcoded today                                                                                                                                                                               | Replace with                                                                                                                     |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `.claude/ticket-planner/asana.mjs` CONFIG block                                      | This board's workspace/project/field GIDs                                                                                                                                                     | Output of `node .claude/ticket-planner/asana.mjs --setup` in the target repo                                                     |
-| Planner ID scheme (everywhere: skills, CLAUDE.md, examples)                          | `WEB-<INITIATIVE>-N` / `-E1` / `-N.M`                                                                                                                                                         | Their prefix (Q8) — keep the epic/story/sub-task shape                                                                           |
-| `plan-tickets`, `sync-tickets`, `kanban-review`, `work-ticket` SKILL.md descriptions | "the Web Skeleton board"                                                                                                                                                                      | Their board name (Q4)                                                                                                            |
-| `kanban-review` SKILL.md step 2                                                      | `gh pr list --repo notablecap/web-skeleton`                                                                                                                                                   | Their `org/repo` (Q14)                                                                                                           |
-| `push-pr` SKILL.md                                                                   | Base branch `develop`; branch allowlist; **step 5's "Account gotcha" and step 7.3** (this repo's two-GitHub-accounts workaround — delete unless they have the same problem); compare-URL slug | Q10–Q14                                                                                                                          |
-| `work-ticket` SKILL.md step 8                                                        | PRs target `develop`; pre-push runs turbo                                                                                                                                                     | Q10, Q2                                                                                                                          |
-| `.husky/pre-push`                                                                    | Branch regex; `pnpm turbo run lint typecheck test`                                                                                                                                            | Q12; Q2 (their lint/typecheck/test command)                                                                                      |
-| `.husky/pre-commit`                                                                  | `pnpm exec lint-staged` (+ nvm bootstrapping)                                                                                                                                                 | Their formatter command, or drop the hook (Q2, Q13)                                                                              |
-| `.husky/commit-msg`                                                                  | Conventional-commit types list                                                                                                                                                                | Usually keep as-is; confirm (Q11)                                                                                                |
-| `.github/workflows/ci.yml`                                                           | pnpm, Node 24, `pnpm turbo run lint typecheck test build`, e2e job                                                                                                                            | Q1–Q3                                                                                                                            |
-| `.github/workflows/asana-sync.yml`                                                   | Trigger branch `develop`; `ASANA_TARGET_SECTION: "Done"`; `ASANA_MARK_COMPLETE: "true"`; planner-ID regex (generic — verify it matches their prefix)                                          | Q7, Q8, Q10                                                                                                                      |
-| `.github/workflows/{tag-release,release-pr,version-bump}.yml`                        | develop/main/release promotion model; merge-commit assumption                                                                                                                                 | Adopt only if Q10/Q11 match; otherwise skip                                                                                      |
-| `CLAUDE.md`                                                                          | Skill list (fine), "Ticket IDs" section (`WEB-CTA-3` examples), `@.claude/WRITING_GUIDELINES.md` reference                                                                                    | Q8; keep structure                                                                                                               |
-| `.claude/WRITING_GUIDELINES.md`                                                      | Everything — Next.js/NestJS/pnpm/turbo specifics, `packages/ui/src/button.tsx` as canonical component, pinned-exact deps, `minimumReleaseAge`                                                 | **Rewrite from the target repo's actual current practice.** If a rule has no counterpart there, omit it rather than aspire to it |
-| `maintain-architecture-docs` SKILL.md + drift workflow                               | `docs/architecture/{API_SPEC,ARCHITECTURE_SPEC,FEATURE_SPEC}.md`                                                                                                                              | Bootstrap the three specs from the target codebase first, or skip the component (Q18)                                            |
-| Repo secrets                                                                         | `ASANA_ACCESS_TOKEN`; `ANTHROPIC_API_KEY`                                                                                                                                                     | `gh secret set …` in the target repo (Q16)                                                                                       |
+| Where                                                                                | Hardcoded today                                                                                                                                                                               | Replace with                                                                          |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `.claude/ticket-planner/asana.mjs` CONFIG block                                      | This board's workspace/project/field GIDs                                                                                                                                                     | Output of `node .claude/ticket-planner/asana.mjs --setup` in the target repo          |
+| Planner ID scheme (everywhere: skills, CLAUDE.md, examples)                          | `WEB-<INITIATIVE>-N` / `-E1` / `-N.M`                                                                                                                                                         | Their prefix (Q6) — keep the epic/story/sub-task shape                                |
+| `plan-tickets`, `sync-tickets`, `kanban-review`, `work-ticket` SKILL.md descriptions | "the Web Skeleton board"                                                                                                                                                                      | Their board name (Q2)                                                                 |
+| `kanban-review` SKILL.md step 2                                                      | `gh pr list --repo notablecap/web-skeleton`                                                                                                                                                   | Their `org/repo` (Q12)                                                                |
+| `push-pr` SKILL.md                                                                   | Base branch `develop`; branch allowlist; **step 5's "Account gotcha" and step 7.3** (this repo's two-GitHub-accounts workaround — delete unless they have the same problem); compare-URL slug | Q8–Q12                                                                                |
+| `work-ticket` SKILL.md step 8                                                        | PRs target `develop`; the note about what pre-push runs                                                                                                                                       | Q8; describe the target repo's own hook behavior                                      |
+| `.husky/commit-msg`                                                                  | Conventional-commit types list, 15-char minimum                                                                                                                                               | Usually keep as-is; confirm (Q9)                                                      |
+| `.husky/pre-push`                                                                    | Branch regex; final line runs this repo's own check command                                                                                                                                   | Q10 for the regex; Q11 — swap in the target repo's check command or delete that line  |
+| `.github/workflows/asana-sync.yml`                                                   | Trigger branch `develop`; `ASANA_TARGET_SECTION: "Done"`; `ASANA_MARK_COMPLETE: "true"`; planner-ID regex (generic — verify it matches their prefix)                                          | Q5, Q6, Q8                                                                            |
+| `.github/workflows/{tag-release,release-pr,version-bump}.yml`                        | develop/main/release promotion model; merge-commit assumption; `version-bump` edits a `package.json`                                                                                          | Adopt only if Q8/Q9 match; otherwise skip                                             |
+| `CLAUDE.md`                                                                          | Skill list (fine); "Ticket IDs" section (`WEB-CTA-3` examples); the `@.claude/WRITING_GUIDELINES.md` reference and other stack-specific lines                                                 | Q6; strip what doesn't apply — this handoff does not port code-style rules            |
+| `maintain-architecture-docs` SKILL.md + drift workflow                               | `docs/architecture/{API_SPEC,ARCHITECTURE_SPEC,FEATURE_SPEC}.md`                                                                                                                              | Bootstrap the three specs from the target codebase first, or skip the component (Q15) |
+| Repo secrets                                                                         | `ASANA_ACCESS_TOKEN`; `ANTHROPIC_API_KEY`                                                                                                                                                     | `gh secret set …` in the target repo (Q14)                                            |
 
 ---
 
@@ -235,65 +249,66 @@ Ask these in the target repo before changing anything. Batch them; skip any that
 recon already answered (confirm the detected value instead). Record the answers —
 they parameterize the Adaptation Map.
 
-**A. Stack & commands**
+**A. Basics**
 
-1. What are the frontend and backend frameworks, and is the repo a monorepo or a
-   single app? _(Determines whether respect-the-layers examples, CI structure, and
-   WRITING_GUIDELINES content translate.)_
-2. What are the exact commands for lint, typecheck, tests, and build? Is there a
-   formatter/lint-staged setup? _(Wired into pre-push, pre-commit, and ci.yml.)_
-3. What Node version is available locally and in CI? _(Planner scripts need
-   ≥ 20.11; they have zero npm dependencies.)_
+1. Is Node ≥ 20.11 available where the planner scripts will run? _(They use
+   `import.meta.dirname` and have zero npm dependencies — Node is their only
+   requirement, regardless of the repo's own stack.)_
 
 **B. Asana**
 
-4. Which Asana workspace and project (board) will this use — an existing board or
+2. Which Asana workspace and project (board) will this use — an existing board or
    a new one? _(`--setup` needs to know what to pick; skill descriptions name the
    board.)_
-5. Paid or free Asana tier? _(Custom fields — Priority, Story Points — and task
+3. Paid or free Asana tier? _(Custom fields — Priority, Story Points — and task
    dependencies are paid. Free tier runs degraded mode: those live in the JSONL
    only, encoded as tags on the board.)_
-6. Should new tasks be auto-assigned to someone, or created unassigned?
-7. What are the board's sections/columns, and which section should a merged PR's
+4. Should new tasks be auto-assigned to someone, or created unassigned?
+5. What are the board's sections/columns, and which section should a merged PR's
    task move to? Should merge also mark the task complete? _(Fills
    `ASANA_TARGET_SECTION` and `ASANA_MARK_COMPLETE` in asana-sync.yml.)_
-8. Pick a planner-ID prefix (this repo uses `WEB-`, e.g. `WEB-CTA-3`). Short,
+6. Pick a planner-ID prefix (this repo uses `WEB-`, e.g. `WEB-CTA-3`). Short,
    uppercase, stable — it becomes the permanent handle in commit scopes and PR
    titles.
-9. Whose Asana personal access token goes in the `ASANA_ACCESS_TOKEN` repo
+7. Whose Asana personal access token goes in the `ASANA_ACCESS_TOKEN` repo
    secret? _(Comments and completions in Asana will appear as that user; a
    service account is cleaner if available.)_
 
 **C. Git flow**
 
-10. What is the integration branch (this system assumes `develop`, promoting to
-    `main`)? Are there protected branches? Do you want the full release train
-    (tag-release, release-pr, version-bump) or just CI + asana-sync?
-11. What merge strategy do PRs use — merge commits or squash? _(tag-release
-    derives semver from commit messages; squash titles degrade every release to a
-    patch bump. This repo uses merge commits for exactly that reason.)_
-12. Keep the branch-name allowlist (`feat/… fix/… chore/…` etc.) or adapt it to
+8. What is the integration branch (this system assumes `develop`, promoting to
+   `main`)? Are there protected branches? Do you want the full release train
+   (tag-release, release-pr, version-bump) or just asana-sync?
+9. What merge strategy do PRs use — merge commits or squash? _(tag-release
+   derives semver from commit messages; squash titles degrade every release to a
+   patch bump. This repo uses merge commits for exactly that reason. The
+   commit-msg hook's conventional format is what makes the derivation work.)_
+10. Keep the branch-name allowlist (`feat/… fix/… chore/…` etc.) or adapt it to
     an existing convention?
-13. Is there an existing git-hooks manager (husky, lefthook, pre-commit)?
-    _(Determines whether `.husky/` drops in or the hook bodies port into the
-    existing manager.)_
+11. Should pre-push also run the repo's own checks before pushing? If so, what is
+    the exact command? _(The hook ships with this repo's command on its last
+    line — it must be swapped for the target's or removed. Never install this
+    repo's toolchain to satisfy the hook.)_
+12. Is there an existing git-hooks manager (husky, lefthook, pre-commit
+    framework)? _(Determines whether `.husky/` drops in or the two hook bodies
+    port into the existing manager.)_
 
 **D. GitHub & secrets**
 
-14. What is the `org/repo`, and is `gh` authenticated as an account that can open
+13. What is the `org/repo`, and is `gh` authenticated as an account that can open
     PRs and set repo secrets there? _(kanban-review and push-pr shell out to
     `gh`.)_
-15. Are GitHub Actions enabled and billed for this repo? _(All the automation
-    rides on Actions; if not, the hooks and skills still work — the asana-sync
-    loop just becomes a manual step.)_
-16. May I add repo secrets: `ASANA_ACCESS_TOKEN` (asana-sync), and — only if
-    adopting release-pr / docs-drift — `ANTHROPIC_API_KEY`?
+14. Are GitHub Actions enabled and billed for this repo? _(asana-sync and the
+    release train ride on Actions; if not, the hooks and skills still work — the
+    board loop just becomes a manual step.)_ And may I add repo secrets:
+    `ASANA_ACCESS_TOKEN` (asana-sync), and — only if adopting release-pr /
+    docs-drift — `ANTHROPIC_API_KEY`?
 
 **E. Scope**
 
-17. Which optional components are in: release train? architecture-docs system
-    (requires writing the three specs first)? e2e in CI?
-18. Any org-managed policy (managed CLAUDE.md, allowed remotes, secret-scanning
+15. Which optional components are in: release train? architecture-docs system
+    (requires writing the three specs first)?
+16. Any org-managed policy (managed CLAUDE.md, allowed remotes, secret-scanning
     hooks) this setup must not conflict with?
 
 ---
@@ -303,30 +318,27 @@ they parameterize the Adaptation Map.
 Each step has a check; do not proceed past a failing check.
 
 1. **Discipline skills + CLAUDE.md.** Copy the 8 skills; adapt CLAUDE.md's skill
-   list and ticket-ID section. → _Check: new Claude session lists the skills and
-   invokes one on demand._
-2. **WRITING_GUIDELINES.** Rewrite from the target repo's observed practice
-   (recon, not aspiration). → _Check: user reviews and approves the rewrite._
-3. **Hooks.** Port the three hooks with the target repo's commands and branch
-   regex; `husky` installed and initialized if adopting it. → _Check: a
-   wrong-format commit message is rejected; a disallowed branch name blocks push;
-   pre-push runs the real checks._
-4. **Planner.** Copy scripts + guide; user exports `ASANA_TOKEN`; run
+   list and ticket-ID section; strip its stack-specific lines. → _Check: new
+   Claude session lists the skills and invokes one on demand._
+2. **Hooks.** Port `commit-msg` and `pre-push` with the target repo's branch
+   regex and check command (or no check command); husky installed and initialized
+   if adopting it. → _Check: a wrong-format commit message is rejected; a
+   disallowed branch name blocks push._
+3. **Planner.** Copy scripts + guide; user exports `ASANA_TOKEN`; run
    `node .claude/ticket-planner/asana.mjs --setup`; paste the CONFIG block into
    `asana.mjs`; then `node .claude/ticket-planner/replay.mjs --smoke` and delete
    the throwaway task in the UI. → _Check: smoke task permalink printed;
    `board.mjs` prints the board._
-5. **Ticket skills.** Apply the Adaptation Map rows for the four ticket skills +
+4. **Ticket skills.** Apply the Adaptation Map rows for the four ticket skills +
    push-pr. → _Check: grep the skills for `WEB-`, `Web Skeleton`, `notablecap`,
    `develop` — every hit is either replaced or deliberately kept._
-6. **CI.** Adapt and land `ci.yml`. → _Check: a trivial test PR goes green._
-7. **asana-sync.** Set the `ASANA_ACCESS_TOKEN` secret; adapt the workflow env.
+5. **asana-sync.** Set the `ASANA_ACCESS_TOKEN` secret; adapt the workflow env.
    → _Check: plan one tiny real ticket via `plan-tickets`, implement it via
    `work-ticket`, ship via `push-pr`, merge — the Asana task gets the PR comment
    and completion/section move, and the bookkeeping commit stamps `status: done`
    in the state file._ (This end-to-end run is the real acceptance test for the
    whole port.)
-8. **Optional tier.** Release train and/or architecture-docs system, per the
+6. **Optional tier.** Release train and/or architecture-docs system, per the
    interview. → _Check per component: tag appears on the integration branch after
    a merge; promotion PR gets an AI description and semver label; drift workflow
    opens a PR when a spec is knowingly violated._
@@ -346,11 +358,9 @@ Each step has a check; do not proceed past a failing check.
   strayed outside the markdown subset (a table or nested list).
 - `--force` deliberately requires `--keys`: conflict resolution is per-ticket and
   human-decided, never board-wide.
-- The planner bookkeeping commit must NOT carry `[skip ci]`: the push already
-  triggers nothing (default `GITHUB_TOKEN` pushes never create workflow runs),
-  but a `[skip ci]` in develop's tip commit suppresses every `pull_request`
-  workflow on a promotion PR opened from it — release-pr and CI included.
-  asana-sync instead dispatches `release-pr.yml` explicitly after pushing.
+- The `[skip ci]` on the planner bookkeeping commit is what stops asana-sync's
+  own commit from triggering the push-to-develop workflows — keep it if you edit
+  that commit message.
 - Squash merges silently break semver derivation in tag-release; either use merge
   commits or accept patch-only bumps.
 - Exit code 2 from any planner script always means "fix your environment"
