@@ -219,6 +219,11 @@ mkdir -p .github/workflows
 cp $SRC/.github/workflows/asana-sync.yml .github/workflows/
 # optional: tag-release.yml release-pr.yml version-bump.yml architecture-docs-drift.yml
 
+# Docs scaffold — docs/rfcs/ is the input hopper for plan-tickets (PRDs/RFCs
+# live here before becoming tickets); the handoff guide travels for reference
+mkdir -p docs/rfcs docs/handoff
+cp $SRC/docs/handoff/HANDOFF.md docs/handoff/
+
 # Guardrails — a starting point to adapt, not final
 cp $SRC/CLAUDE.md .
 ```
